@@ -1,16 +1,14 @@
 # '''
 import polars as pl
 import matplotlib.pyplot as plt
-# from matplotlib.backend_tools import ToolBase, ToolToggleBase
-# plt.rcParams['toolbar'] = 'toolmanager'
 import numpy as np
 from scipy.integrate import quad
+from scipy.optimize import curve_fit
 import os
 import matplotlib
 from cursor import *
-import tkinter as tk
-from tkinter import ttk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from lmfit import Model
+from lmfit.models import GaussianModel, ConstantModel
 
 # tex_fonts = {
 #                 # Use LaTeX to write all text
@@ -47,7 +45,7 @@ class Histogrammer:
         amplitude = (volume / res) * bin_width
         
         return amplitude * np.exp( -(x-mean)**2 / (2*sigma**2) )
-       
+           
     def histo1d(
         self,
         xdata: list,
@@ -107,7 +105,7 @@ class Histogrammer:
             linewidth = 0.5
         
         line, = ax.step(hist_bins[:-1], hist_counts, where='post', label=label, linewidth=linewidth, color=color, linestyle=linestyle,)
-        ax.set_xlim(range[0], range[1])
+        ax.set_xlim(range)
         ax.set_ylim(bottom=0)
         
         ax.set_xlabel(xlabel if xlabel is not None else column)
@@ -151,7 +149,7 @@ class Histogrammer:
                 stats = f"Mean: {np.mean(filtered_data):.2f}\nStd Dev: {np.std(filtered_data):.2f}\nIntegral: {np.sum(hist_counts):.0f}"
                 
                 text_box.set_text(stats)
-                
+                                
                 ax.figure.canvas.draw()
 
             # Create the stats box
@@ -183,11 +181,112 @@ class Histogrammer:
                 "motion_notify_event", ax.figure.canvas, *t.transform((0, 0))
             )._process()
 
-        fig.tight_layout()
+        region_markers = []
+        background_markers = []
+        
+        gaussians = [] 
+                
+        def on_press(event):  # Function to handle fitting gaussians
+                        
+            if event.inaxes is ax and event.key == 'r':
+                
+                if len(region_markers) >= 2:
+                    # If two lines are present, remove them from the plot and the list
+                    for line in region_markers:
+                        line.remove()
+                    region_markers.clear()
+                                    
+                region_pos = event.xdata
+                
+                # Add a vertical line to the 2D histogram plot
+                line = ax.axvline(region_pos, color='#0B00E9')
+                
+                # Append the line to the list of added lines
+                region_markers.append(line)
 
-        self.figures.append(fig)
+                # Show the figure with the updated plot
+                fig.canvas.draw()
+                
+                pass
+                
+            if event.inaxes is ax and event.key == 'b':
 
-        return fig
+                pos = event.xdata
+                           
+                line = ax.axvline(x=pos, color='green')
+
+                # # Append the line to the list of added lines
+                background_markers.append(line)
+
+                # Show the figure with the updated plot
+                fig.canvas.draw()
+                    
+                pass
+            
+            if event.inaxes is ax and event.key == 'F':
+                
+                if len(region_markers) != 2:
+                    print("Must have two region markers!")
+                else:
+                    
+                    region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
+                    region_markers_pos.sort()
+                    
+                    fit_bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
+                    
+                    fit_range = (fit_bin_centers >= region_markers_pos[0]) & (fit_bin_centers <= region_markers_pos[1])
+                                        
+                    fit_initial_params = [np.max(hist_counts[fit_range]), np.mean(hist_counts[fit_range]), np.std(hist_counts[fit_range])]
+                    
+                            
+                    model = GaussianModel()
+                    model.set_param_hint('sigma', value=np.std(hist_counts[fit_range]))
+                    model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
+                    model.set_param_hint('amplitude', value=np.max(hist_counts[fit_range]))
+                        
+                    result = model.fit(hist_counts[fit_range], x=fit_bin_centers[fit_range])
+
+                    # Print the fit results
+                    for param_name, param_value in result.params.items():
+                        rounded_value = round(param_value.value, 2)
+                        rounded_stderr = round(param_value.stderr, 2)
+                        print(f"{param_name}: {rounded_value} +/- {rounded_stderr}")
+                        
+                        
+                    
+                    # Get the fitted parameter values
+                    params = result.params
+
+                    # Calculate the area under the fitted Gaussian curve using numerical integration
+                    # Define the range for integration (based on 'fit_range')
+                    x_range = fit_bin_centers[fit_range]
+                    y_range = result.best_fit
+                    area_under_curve = np.trapz(y_range, x=x_range)
+                    print("Area under the fitted Gaussian curve:", area_under_curve)
+                    
+                    
+                    # gaus_fit_line = ax.plot(fit_bin_centers[fit_range], result.best_fit, color='red') #Not smooth fit line
+
+                    fit_x_line = np.linspace(region_markers_pos[0], region_markers_pos[1], 1000)
+                    # fit_y_line = model(fit_x_line, result.params['height'].value, result.params['center'].value, result.params['sigma'].value)
+                    
+                    # gaus_fit_line = ax.plot(fit_x_line, fit_y_line, color='red', linewidth=1)
+                    
+                    
+                    fig.canvas.draw()
+                    
+                    pass
+
+                    
+
+                       
+        ax.figure.canvas.mpl_connect('key_press_event', on_press)
+            
+        if ax is None:
+            fig.tight_layout()
+            self.figures.append(fig)
+
+        return
                 
     def histo2d(
         self,
@@ -352,85 +451,7 @@ class Histogrammer:
         self.figures.append(fig)
         
         return hist, x_edges, y_edges
-
-    def plot_all_figures(self):
-        # Create a Tkinter window
-        root = tk.Tk()
-        root.title("Figures")
-
-        # Set the window size
-        window_width = root.winfo_screenwidth()
-        window_height = root.winfo_screenheight()
-        root.geometry(f"{window_width}x{window_height}")
-
-        # Create a main frame
-        main_frame = ttk.Frame(root)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Create a canvas for the main frame
-        canvas = tk.Canvas(main_frame)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # Create a scrollbar for the main frame
-        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=canvas.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # # Create a horizontal scrollbar for the main frame
-        # x_scrollbar = ttk.Scrollbar(main_frame, orient=tk.HORIZONTAL, command=canvas.xview)
-        # x_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-        # canvas.configure(xscrollcommand=x_scrollbar.set)
-
-        # Create a scrollable frame within the canvas
-        scrollable_frame = ttk.Frame(canvas)
-        canvas.create_window((0, 0), window=scrollable_frame, anchor=tk.NW)
-
-        # Configure the scrollable frame to expand with the window
-        scrollable_frame.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
-
-        # Define the number of columns and desired plots per row
-        num_columns = 2
-        plots_per_row = 3
-
-        # Create a counter to keep track of the current plot
-        plot_counter = 0
-
-        for fig in self.figures:
-            # Calculate the row and column for the current plot
-            row = plot_counter // plots_per_row
-            column = plot_counter % num_columns
-
-            # Create a frame for the figure
-            figure_frame = ttk.Frame(scrollable_frame)
-            figure_frame.grid(row=row, column=column, padx=5, pady=5)
-
-            # Create a canvas for the figure
-            figure_canvas = FigureCanvasTkAgg(fig, master=figure_frame)
-            figure_canvas.draw()
-            figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-            # Create a toolbar for the figure
-            toolbar = NavigationToolbar2Tk(figure_canvas, figure_frame)
-            toolbar.update()
-            toolbar.pack(side=tk.TOP, fill=tk.BOTH)
-
-            # Close the figure
-            # plt.close()
-            
-            # Increment the plot counter
-            plot_counter += 1
-
-        # Update the canvas scrollable region
-        canvas.update_idletasks()
-        canvas.configure(scrollregion=canvas.bbox("all"))
-
-        # Bind mousewheel events to the canvas
-        canvas.bind("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1 * (event.delta / 120)), "units"))
-        canvas.bind("<Shift-MouseWheel>", lambda event: canvas.xview_scroll(int(-1 * (event.delta / 120)), "units"))
-
-        # Run the Tkinter event loop
-        root.mainloop()
-        
+ 
     def general_xml(self, file):
         
         import xml.etree.ElementTree as ET
@@ -553,22 +574,20 @@ for det in range(NumDetectors):
 
     pg_data.append( (det_df["XavgEnergyCalibrated"], det_df[f"Cebra{det}EnergyCalibrated"]) )
 
-
 h = Histogrammer()
 
+# fig, ax = plt.subplots(2,2, figsize=(10,10))
+# ax = ax.flatten()
 
-fig, ax = plt.subplots(2,2, figsize=(10,10))
-ax = ax.flatten()
-
-h.histo1d(xdata=df["Xavg"], bins=600, range=(-300,300), ax=ax[0])
+h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000))
 # h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
 
-h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]], ax=ax[1])
+# h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
 
 # for i in range(5):
-h.histo2d(data=[[det_df[0]["XavgEnergyCalibrated"],det_df[0][f"Cebra0EnergyCalibrated"]]] , bins=[500,500], range=[[0,6000], [0,6000]], ax=ax[2])
+#     h.histo2d(data=[[det_dfs[i]["Xavg"],det_dfs[i][f"Cebra{i}EnergyCalibrated"]]] , bins=[600,250], range=[[-300,300], [0,6000]], xlabel="Xavg", ylabel=f"Cebra{i}Energy")
 
-h.histo2d(data=pg_data, bins=[500,500], range=[[0,6000], [0,6000]], xlabel=r"$^{53}$Cr Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]")
+# h.histo2d(data=pg_data, bins=[500,250], range=[[0,6000], [0,6000]], xlabel=r"$^{53}$Cr Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]")
 
 
 
