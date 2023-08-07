@@ -27,6 +27,8 @@ from lmfit.models import GaussianModel, LinearModel, ExponentialModel
 class Histogrammer:
 
     def __init__(self):
+        
+        
         plt.rcParams['keymap.pan'].remove('p')
         plt.rcParams['keymap.home'].remove('r')
         plt.rcParams['keymap.fullscreen'].remove('f')
@@ -52,7 +54,7 @@ class Histogrammer:
         xdata: list,
         bins: int,
         range: list,
-        ax: plt.Axes = None,
+        subplots:(plt.figure,plt.Axes) = None,
         xlabel: str = None,
         ylabel: str = None,
         label: str = None,
@@ -99,8 +101,10 @@ class Histogrammer:
                 for count in hist_counts:
                     f.write(f"{count}\n")
                     
-        if ax is None:
+        if subplots is None:
             fig, ax = plt.subplots()
+        else:
+            fig, ax = subplots 
             
         if linewidth is None:
             linewidth = 0.5
@@ -368,8 +372,9 @@ class Histogrammer:
         title: str = None,
         xlabel: str = None,
         ylabel: str = None,
-        ax:plt.Axes = None,
+        subplots:(plt.figure,plt.Axes) = None,
         display_stats: bool = True,
+        save_histogram:bool = False,
         ):
 
         import matplotlib.colors as colors
@@ -381,9 +386,11 @@ class Histogrammer:
         hist, x_edges, y_edges = np.histogram2d(x_data, y_data, bins=bins, range=range)
 
         # draw a 2d histogram using matplotlib. If no ax is provided, make a new fig, ax using plt.subplots
-        if ax is None:
+        if subplots is None:
             fig, ax = plt.subplots()
-                    
+        else:
+            fig, ax = subplots 
+            
         # draw a 2d histogram and add a similar stat bar to the 2d histogram, just the intergral though
         ax.hist2d(x_data, y_data, bins=bins, range=range, norm=colors.LogNorm())
         
@@ -431,6 +438,10 @@ class Histogrammer:
             # Connect the on_lims_change function to the 'xlim_changed' event
             ax.callbacks.connect('xlim_changed', on_lims_change)
             ax.callbacks.connect('ylim_changed', on_lims_change)
+            
+        if save_histogram:
+            plt.savefig(f"{ylabel}_{xlabel}.png",format='png', dpi=900)
+            plt.savefig(f"{ylabel}_{xlabel}.pdf",format='pdf')
             
         # Keep track of the added lines for the x and y projections
         added_y_lines = []
@@ -609,11 +620,13 @@ class Histogrammer:
 
         return cal_data
 
-# df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
-df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+# df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
 
 #52Cr(d,p)53Cr, 8.3 kG field 
 xavg_ECal_Para = [-0.0023904378617156377,-18.49776562220117, 1357.4874219091237]
+xavg_ECal_Para = [-0.0023904378617156377,-18.49776562220117, 1457.4874219091237]
+
 a, b, c = xavg_ECal_Para
 df = df.with_columns( ( (a*pl.col(f"Xavg")*pl.col(f"Xavg")) + (b*pl.col(f"Xavg")) + (c) ).alias(f"XavgEnergyCalibrated"))
 
@@ -653,21 +666,43 @@ h = Histogrammer()
 # ax = ax.flatten()
 
 # h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000))
-h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
+# h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
 
 # h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
 
 # for i in range(5):
 #     h.histo2d(data=[[det_dfs[i]["Xavg"],det_dfs[i][f"Cebra{i}EnergyCalibrated"]]] , bins=[600,250], range=[[-300,300], [0,6000]], xlabel="Xavg", ylabel=f"Cebra{i}Energy")
 
-# h.histo2d(data=pg_data, bins=[500,250], range=[[0,6000], [0,6000]], xlabel=r"$^{53}$Cr Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]")
 
+# fig, axs = plt.subplots(1,1, figsize=(5,5))
+fig1, axs1 = plt.subplots(1,1, figsize=(5,5))
 
+h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000), subplots=(fig1,axs1))
 
+# h.histo2d(data=pg_data, bins=[400,400], range=[[0,5200], [0,5200]], subplots=(fig,axs), xlabel=r"$^{53}$Cr Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]",display_stats=False)
 
-# h.plot_all_figures()
+# x = np.linspace(0,5200,5200)
+# gs = x 
+# first_excited = x - 564
+# second_excited = x - 1006
+# third_excited = x - 1289
 
-# print(h.figures)
+# axs.plot(x,gs, color='#17a657',             linewidth=1, label=r'$\frac{3}{2}^{-}$ Band', alpha=0.8, linestyle='-')
+# axs.plot(x,first_excited, color='#751a9c',  linewidth=1, label=r'$\frac{1}{2}^{-}$ Band', alpha=0.8, linestyle='--')
+# axs.plot(x,second_excited, color='#a61753', linewidth=1, label=r'$\frac{5}{2}^{-}$ Band', alpha=0.8, linestyle='-.')
+# axs.plot(x,third_excited, color='#251a9c',  linewidth=2, label=r'$\frac{7}{2}^{-}$ Band', alpha=0.8, linestyle=':')
+
+# axs.legend(loc='upper left',shadow=False, frameon=True, fancybox=False, edgecolor='none', facecolor='none')
+
+# fig.subplots_adjust(top=0.985,
+# bottom=0.097,
+# left=0.137,
+# right=0.983,
+# hspace=0.2,
+# wspace=0.2)
+
+# plt.savefig(f"53Cr_pg_matrix.pdf",format='pdf')
+# plt.savefig(f"53Cr_pg_matrix.png",format='png',dpi=900)
 
 plt.show()
 
