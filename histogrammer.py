@@ -3,12 +3,9 @@ import polars as pl
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import quad
-from scipy.optimize import curve_fit
 import os
-import matplotlib
 from cursor import *
-from lmfit import Model
-from lmfit.models import GaussianModel, ConstantModel
+from lmfit.models import GaussianModel, LinearModel, ExponentialModel
 
 # tex_fonts = {
 #                 # Use LaTeX to write all text
@@ -30,6 +27,10 @@ from lmfit.models import GaussianModel, ConstantModel
 class Histogrammer:
 
     def __init__(self):
+        plt.rcParams['keymap.pan'].remove('p')
+        plt.rcParams['keymap.home'].remove('r')
+        plt.rcParams['keymap.fullscreen'].remove('f')
+        plt.rcParams['keymap.quit_all'].append('Q')
         
         self.figures = []
         self.cursor = None
@@ -95,8 +96,8 @@ class Histogrammer:
                 f.write(f"# Counts\n")
                 f.write(f"# Calibrate in HDTV with: calibration position set {range[0]-0.5} 1\n")
                 
-                for i in range(len(hist_counts)):
-                    f.write(f"{hist_counts[i]}\n")
+                for count in hist_counts:
+                    f.write(f"{count}\n")
                     
         if ax is None:
             fig, ax = plt.subplots()
@@ -182,105 +183,176 @@ class Histogrammer:
             )._process()
 
         region_markers = []
+        peak_markers = []
         background_markers = []
         
         gaussians = [] 
+        background_lines = []
                 
-        def on_press(event):  # Function to handle fitting gaussians
-                        
-            if event.inaxes is ax and event.key == 'r':
-                
-                if len(region_markers) >= 2:
-                    # If two lines are present, remove them from the plot and the list
-                    for line in region_markers:
-                        line.remove()
-                    region_markers.clear()
-                                    
-                region_pos = event.xdata
-                
-                # Add a vertical line to the 2D histogram plot
-                line = ax.axvline(region_pos, color='#0B00E9')
-                
-                # Append the line to the list of added lines
-                region_markers.append(line)
-
-                # Show the figure with the updated plot
-                fig.canvas.draw()
-                
-                pass
-                
-            if event.inaxes is ax and event.key == 'b':
-
-                pos = event.xdata
-                           
-                line = ax.axvline(x=pos, color='green')
-
-                # # Append the line to the list of added lines
-                background_markers.append(line)
-
-                # Show the figure with the updated plot
-                fig.canvas.draw()
-                    
-                pass
+        def on_key(event):  # Function to handle fitting gaussians
             
-            if event.inaxes is ax and event.key == 'F':
-                
-                if len(region_markers) != 2:
-                    print("Must have two region markers!")
-                else:
+            if event.inaxes is not None:    
+                   
+                if event.key == 'r': # region markers
                     
-                    region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
-                    region_markers_pos.sort()
-                    
-                    fit_bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
-                    
-                    fit_range = (fit_bin_centers >= region_markers_pos[0]) & (fit_bin_centers <= region_markers_pos[1])
+                    if len(region_markers) >= 2:
+                        # If two lines are present, remove them from the plot and the list
+                        for line in region_markers:
+                            line.remove()
+                        region_markers.clear()
                                         
-                    fit_initial_params = [np.max(hist_counts[fit_range]), np.mean(hist_counts[fit_range]), np.std(hist_counts[fit_range])]
+                    region_pos = event.xdata
                     
-                            
-                    model = GaussianModel()
-                    model.set_param_hint('sigma', value=np.std(hist_counts[fit_range]))
-                    model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
-                    model.set_param_hint('amplitude', value=np.max(hist_counts[fit_range]))
-                        
-                    result = model.fit(hist_counts[fit_range], x=fit_bin_centers[fit_range])
+                    line = ax.axvline(region_pos, color='#0B00E9', linewidth=0.5)
+                    
+                    region_markers.append(line)
 
-                    # Print the fit results
-                    for param_name, param_value in result.params.items():
-                        rounded_value = round(param_value.value, 2)
-                        rounded_stderr = round(param_value.stderr, 2)
-                        print(f"{param_name}: {rounded_value} +/- {rounded_stderr}")
-                        
-                        
-                    
-                    # Get the fitted parameter values
-                    params = result.params
-
-                    # Calculate the area under the fitted Gaussian curve using numerical integration
-                    # Define the range for integration (based on 'fit_range')
-                    x_range = fit_bin_centers[fit_range]
-                    y_range = result.best_fit
-                    area_under_curve = np.trapz(y_range, x=x_range)
-                    print("Area under the fitted Gaussian curve:", area_under_curve)
-                    
-                    
-                    # gaus_fit_line = ax.plot(fit_bin_centers[fit_range], result.best_fit, color='red') #Not smooth fit line
-
-                    fit_x_line = np.linspace(region_markers_pos[0], region_markers_pos[1], 1000)
-                    # fit_y_line = model(fit_x_line, result.params['height'].value, result.params['center'].value, result.params['sigma'].value)
-                    
-                    # gaus_fit_line = ax.plot(fit_x_line, fit_y_line, color='red', linewidth=1)
-                    
-                    
                     fig.canvas.draw()
                     
                     pass
-
                     
+                if event.key == 'b': # background markers
 
-                       
-        ax.figure.canvas.mpl_connect('key_press_event', on_press)
+                    pos = event.xdata
+                            
+                    line = ax.axvline(x=pos, color='green', linewidth=0.5)
+
+                    background_markers.append(line)
+
+                    fig.canvas.draw()
+                        
+                    pass
+                
+                if event.key == 'B': # fit background
+                    
+                    for line in background_lines:
+                        line.remove()
+                    background_lines.clear()
+                    
+                    background_pos = []
+                    for background_marker in background_markers:
+                        background_pos.append(background_marker.get_xdata()[0])
+                    background_pos.sort()
+                    
+                    bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
+                    background_y_values = []
+                    for pos in background_pos:
+                        bin_indices = np.argmin(np.abs(bin_centers - pos))
+                        background_y_values.append(hist_counts[bin_indices])
+                        
+                    background = LinearModel()
+                    background_result = background.fit(background_y_values, x=background_pos)
+                    
+                    background_x_values = np.linspace(background_pos[0], background_pos[-1], 1000)
+                    background_line = plt.plot(background_x_values, background_result.eval(x=background_x_values), color='green', linewidth=0.5)
+                    background_lines.append(background_line[0])
+                    
+                    fig.canvas.draw()
+                
+                if event.key == 'p': # peak markers
+
+                    pos = event.xdata
+                            
+                    line = ax.axvline(x=pos, color='purple', linewidth=0.5)
+
+                    peak_markers.append(line)
+
+                    fig.canvas.draw()
+                        
+                    pass
+                
+                if event.key == '-': # remove all markers
+
+                    for line in background_markers:
+                        line.remove()
+                    background_markers.clear()
+                    
+                    for line in peak_markers:
+                        line.remove()  
+                    peak_markers.clear()
+                    
+                    for line in region_markers:
+                        line.remove()  
+                    region_markers.clear()
+                    
+                    for line in background_lines:
+                        line.remove()
+                    background_lines.clear()
+                    
+                    fig.canvas.draw()
+                        
+                if event.key == 'f':
+                    
+                    if len(region_markers) != 2:
+                        print("Must have two region markers!")
+                    else:
+                        
+                        region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
+                        region_markers_pos.sort()
+                        
+                        fit_bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
+                        
+                        fit_range = (fit_bin_centers >= region_markers_pos[0]) & (fit_bin_centers <= region_markers_pos[1])
+                            
+                        # Fit a linear model to the background bacsed off the region markers
+                        background = LinearModel()
+                        
+                        # Find bin indices corresponding to region markers
+                        region_marker_indices = [np.argmin(np.abs(fit_bin_centers - region_markers_pos[0])),
+                                                np.argmin(np.abs(fit_bin_centers - region_markers_pos[1]))]
+
+                        # Get values at region marker bins
+                        region_marker_values = hist_counts[region_marker_indices]
+                                            
+                        # Fit the linear model to the region marker values
+                        background_result = background.fit(region_marker_values, x=region_markers_pos)
+                        background_values = background_result.eval(x=fit_bin_centers)
+                        
+                        hist_counts_subtracted = hist_counts[fit_range] - background_values[fit_range]
+
+                        plt.plot(fit_bin_centers[region_marker_indices], background_result.best_fit, 'g', linewidth=0.5) # background fit
+                        
+                        model= GaussianModel()
+                
+                        model.set_param_hint('sigma', value=np.std(hist_counts[fit_range]))
+                        # model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
+                        model.set_param_hint('height', value=np.max(hist_counts[fit_range]))
+                        model.set_param_hint('amplitude', value=np.sum(hist_counts[fit_range]))
+                        
+                        if len(peak_markers) == 1:
+                            model.set_param_hint('center', value=peak_markers[0].get_xdata()[0])
+                        else:
+                            model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
+                        
+                        result = model.fit(hist_counts_subtracted, x=fit_bin_centers[fit_range])
+
+                        # Print the fit results
+                        for param_name, param_value in result.params.items():
+                            rounded_value = round(param_value.value, 2)
+                            rounded_stderr = round(param_value.stderr, 2)
+                            print(f"{param_name}: {rounded_value} +/- {rounded_stderr}")
+                            
+
+                        x_range = fit_bin_centers[fit_range]                    
+                        area_bin_width = x_range[1] - x_range[0]
+                        
+                        area = result.params['amplitude'].value / area_bin_width
+                        area_uncertainty = result.params['amplitude'].stderr / area_bin_width
+                        
+                        print(f"Area: {round(area)} +/- {round(area_uncertainty)}")
+                        
+                        # plt.plot(fit_bin_centers[fit_range], result.best_fit, color='red', linewidth=0.5) #Just the gaussian
+                        # plt.plot(fit_bin_centers[fit_range], result.best_fit + background_values[fit_range], 'r', linewidth=0.5) #gaussian + background
+            
+                        x = np.linspace(fit_bin_centers[fit_range][0], fit_bin_centers[fit_range][-1], 1000)
+            
+                        plt.plot(x, result.eval(x=x), color='red', linewidth=0.5) #Just the gaussian
+                        plt.plot(x, result.eval(x=x) + background_result.eval(x=x), 'red', linewidth=0.5) #gaussian + background
+                        
+                        fig.canvas.draw()
+                        
+                                        
+        ax.figure.canvas.mpl_connect('key_press_event', on_key)
             
         if ax is None:
             fig.tight_layout()
@@ -537,7 +609,8 @@ class Histogrammer:
 
         return cal_data
 
-df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+# df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
 
 #52Cr(d,p)53Cr, 8.3 kG field 
 xavg_ECal_Para = [-0.0023904378617156377,-18.49776562220117, 1357.4874219091237]
@@ -579,8 +652,8 @@ h = Histogrammer()
 # fig, ax = plt.subplots(2,2, figsize=(10,10))
 # ax = ax.flatten()
 
-h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000))
-# h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
+# h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000))
+h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
 
 # h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
 
