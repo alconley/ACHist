@@ -831,8 +831,8 @@ class Histogrammer:
             
             pass
 
-# df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
-df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+# df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
 
 #52Cr(d,p)53Cr, 8.3 kG field 
 xavg_ECal_Para = [-0.0023904378617156377,-18.49776562220117, 1457.4874219091237]
