@@ -6,6 +6,7 @@ from scipy.integrate import quad
 import os
 from cursor import *
 from lmfit.models import GaussianModel, LinearModel, ExponentialModel
+from pygame.locals import *
 
 # tex_fonts = {
 #                 # Use LaTeX to write all text
@@ -27,11 +28,12 @@ from lmfit.models import GaussianModel, LinearModel, ExponentialModel
 class Histogrammer:
 
     def __init__(self):
-        
-        
+           
         plt.rcParams['keymap.pan'].remove('p')
         plt.rcParams['keymap.home'].remove('r')
         plt.rcParams['keymap.fullscreen'].remove('f')
+        plt.rcParams['keymap.grid'].remove('g')
+        plt.rcParams['keymap.grid_minor'].remove('G')
         plt.rcParams['keymap.quit_all'].append('Q')
         
         self.figures = []
@@ -54,7 +56,7 @@ class Histogrammer:
         xdata: list,
         bins: int,
         range: list,
-        subplots:(plt.figure,plt.Axes) = None,
+        subplots:(plt.figure, plt.Axes) = None,
         xlabel: str = None,
         ylabel: str = None,
         label: str = None,
@@ -86,6 +88,8 @@ class Histogrammer:
                 
         hist_counts, hist_bins = np.histogram(data, bins=bins, range=range)
         
+        hist_bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
+        
         if save_histogram:
             # Save the histogram data to a file
             
@@ -106,8 +110,7 @@ class Histogrammer:
         else:
             fig, ax = subplots 
             
-        if linewidth is None:
-            linewidth = 0.5
+        if linewidth is None: linewidth = 0.5
         
         line, = ax.step(hist_bins[:-1], hist_counts, where='post', label=label, linewidth=linewidth, color=color, linestyle=linestyle,)
         ax.set_xlim(range)
@@ -190,8 +193,29 @@ class Histogrammer:
         peak_markers = []
         background_markers = []
         
-        gaussians = [] 
+        temp_fits = []
+        stored_fits = []
+          
         background_lines = []
+        
+        def fit_background(background_markers, hist_counts, hist_bin_centers):
+            background_pos = [marker.get_xdata()[0] for marker in background_markers]
+            background_pos.sort()
+
+
+            background_y_values = [hist_counts[np.argmin(np.abs(hist_bin_centers - pos))] for pos in background_pos]
+            background = LinearModel()
+            # background = ExponentialModel()
+            
+            background_result = background.fit(background_y_values, x=background_pos)
+
+            background_x_values = np.linspace(background_pos[0], background_pos[-1], 1000)
+            background_values = background_result.eval(x=background_x_values)
+            background_line = plt.plot(background_x_values, background_values, color='green', linewidth=0.5)
+            
+            hist_counts_subtracted = hist_counts - background_result.eval(x=hist_bin_centers)
+                        
+            return hist_counts_subtracted, background_result, background_line[0]
                 
         def on_key(event):  # Function to handle fitting gaussians
             
@@ -226,33 +250,7 @@ class Histogrammer:
                     fig.canvas.draw()
                         
                     pass
-                
-                if event.key == 'B': # fit background
-                    
-                    for line in background_lines:
-                        line.remove()
-                    background_lines.clear()
-                    
-                    background_pos = []
-                    for background_marker in background_markers:
-                        background_pos.append(background_marker.get_xdata()[0])
-                    background_pos.sort()
-                    
-                    bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
-                    background_y_values = []
-                    for pos in background_pos:
-                        bin_indices = np.argmin(np.abs(bin_centers - pos))
-                        background_y_values.append(hist_counts[bin_indices])
-                        
-                    background = LinearModel()
-                    background_result = background.fit(background_y_values, x=background_pos)
-                    
-                    background_x_values = np.linspace(background_pos[0], background_pos[-1], 1000)
-                    background_line = plt.plot(background_x_values, background_result.eval(x=background_x_values), color='green', linewidth=0.5)
-                    background_lines.append(background_line[0])
-                    
-                    fig.canvas.draw()
-                
+
                 if event.key == 'p': # peak markers
 
                     pos = event.xdata
@@ -265,7 +263,7 @@ class Histogrammer:
                         
                     pass
                 
-                if event.key == '-': # remove all markers
+                if event.key == '-': # remove all markers and temp fits
 
                     for line in background_markers:
                         line.remove()
@@ -283,9 +281,29 @@ class Histogrammer:
                         line.remove()
                     background_lines.clear()
                     
+                    for fit in temp_fits:
+                        for line in fit:
+                            line.remove()
+                    temp_fits.clear()
+                    
                     fig.canvas.draw()
-                        
-                if event.key == 'f':
+                       
+                if event.key == 'B':  # fit background
+                    for line in background_lines:
+                        line.remove()
+                    background_lines.clear()
+                    
+                    hist_counts_subtracted, background_result, background_line = fit_background(background_markers, hist_counts, hist_bin_centers)
+                    background_lines.append(background_line)
+                    
+                    fig.canvas.draw()
+                      
+                if event.key == 'f': # fit gaussian to region
+                    
+                    for fit in temp_fits:
+                        for line in fit:
+                            line.remove()
+                    temp_fits.clear()
                     
                     if len(region_markers) != 2:
                         print("Must have two region markers!")
@@ -293,74 +311,82 @@ class Histogrammer:
                         
                         region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
                         region_markers_pos.sort()
+                                                
+                        fit_range = (hist_bin_centers >= region_markers_pos[0]) & (hist_bin_centers <= region_markers_pos[1])
                         
-                        fit_bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
+                        if len(background_markers) == 0:
+                            hist_counts_subtracted, background_result, background_line = fit_background(region_markers, hist_counts, hist_bin_centers)
                         
-                        fit_range = (fit_bin_centers >= region_markers_pos[0]) & (fit_bin_centers <= region_markers_pos[1])
-                            
-                        # Fit a linear model to the background bacsed off the region markers
-                        background = LinearModel()
-                        
-                        # Find bin indices corresponding to region markers
-                        region_marker_indices = [np.argmin(np.abs(fit_bin_centers - region_markers_pos[0])),
-                                                np.argmin(np.abs(fit_bin_centers - region_markers_pos[1]))]
+                        else:
+                            for line in background_lines:
+                                line.remove()
+                            background_lines.clear()
 
-                        # Get values at region marker bins
-                        region_marker_values = hist_counts[region_marker_indices]
-                                            
-                        # Fit the linear model to the region marker values
-                        background_result = background.fit(region_marker_values, x=region_markers_pos)
-                        background_values = background_result.eval(x=fit_bin_centers)
-                        
-                        hist_counts_subtracted = hist_counts[fit_range] - background_values[fit_range]
-
-                        plt.plot(fit_bin_centers[region_marker_indices], background_result.best_fit, 'g', linewidth=0.5) # background fit
-                        
+                            hist_counts_subtracted, background_result, background_line = fit_background(background_markers, hist_counts, hist_bin_centers)
+     
                         model= GaussianModel()
                 
-                        model.set_param_hint('sigma', value=np.std(hist_counts[fit_range]))
-                        # model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
-                        model.set_param_hint('height', value=np.max(hist_counts[fit_range]))
-                        model.set_param_hint('amplitude', value=np.sum(hist_counts[fit_range]))
+                        model.set_param_hint('sigma', value=np.std(hist_counts_subtracted[fit_range]))
+                        model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
+                        model.set_param_hint('height', value=np.max(hist_counts_subtracted[fit_range]))
+                        model.set_param_hint('amplitude', value=np.sum(hist_counts_subtracted[fit_range]))
                         
-                        if len(peak_markers) == 1:
-                            model.set_param_hint('center', value=peak_markers[0].get_xdata()[0])
-                        else:
-                            model.set_param_hint('center', value=np.mean(hist_counts[fit_range]))
-                        
-                        result = model.fit(hist_counts_subtracted, x=fit_bin_centers[fit_range])
+                        for marker in peak_markers:
+                            if marker.get_xdata()[0] > region_markers_pos[0] and marker.get_xdata()[0] < region_markers_pos[1]:
+                                model.set_param_hint('center', value=marker.get_xdata()[0])
+                                break
+                    
+                        result = model.fit(hist_counts_subtracted[fit_range], x=hist_bin_centers[fit_range])
 
-                        # Print the fit results
-                        for param_name, param_value in result.params.items():
-                            rounded_value = round(param_value.value, 2)
-                            rounded_stderr = round(param_value.stderr, 2)
-                            print(f"{param_name}: {rounded_value} +/- {rounded_stderr}")
+                        # # Print the fit results
+                        # for param_name, param_value in result.params.items():
+                        #     rounded_value = round(param_value.value, 2)
+                        #     rounded_stderr = round(param_value.stderr, 2)
+                        #     print(f"{param_name}: {rounded_value} +/- {rounded_stderr}")
                             
-
-                        x_range = fit_bin_centers[fit_range]                    
+                        x_range = hist_bin_centers[fit_range]                    
                         area_bin_width = x_range[1] - x_range[0]
                         
                         area = result.params['amplitude'].value / area_bin_width
                         area_uncertainty = result.params['amplitude'].stderr / area_bin_width
                         
-                        print(f"Area: {round(area)} +/- {round(area_uncertainty)}")
+                        print(f"Mean: {round(result.params['center'].value,3)} +/- {round(result.params['center'].stderr,3)}")
+                        print(f"FWHM: {round(result.params['fwhm'].value,3)} +/- {round(result.params['fwhm'].stderr,3)}")
+                        print(f"Area: {round(area)} +/- {round(area_uncertainty)}\n")
                         
-                        # plt.plot(fit_bin_centers[fit_range], result.best_fit, color='red', linewidth=0.5) #Just the gaussian
-                        # plt.plot(fit_bin_centers[fit_range], result.best_fit + background_values[fit_range], 'r', linewidth=0.5) #gaussian + background
+                        # plt.plot(hist_bin_centers[fit_range], result.best_fit, color='red', linewidth=0.5) #Just the gaussian
+                        # plt.plot(hist_bin_centers[fit_range], result.best_fit + background_values[fit_range], 'r', linewidth=0.5) #gaussian + background
+                                    
+                        x = np.linspace(result.params['center'].value - 4*result.params['sigma'].value, result.params['center'].value + 4*result.params['sigma'].value, 1000)
             
-                        x = np.linspace(fit_bin_centers[fit_range][0], fit_bin_centers[fit_range][-1], 1000)
-            
-                        plt.plot(x, result.eval(x=x), color='red', linewidth=0.5) #Just the gaussian
-                        plt.plot(x, result.eval(x=x) + background_result.eval(x=x), 'red', linewidth=0.5) #gaussian + background
+                        gaus = plt.plot(x, result.eval(x=x), color='red', linewidth=0.5) #Just the gaussian
+                        gaus_p_background = plt.plot(x, result.eval(x=x) + background_result.eval(x=x), 'red', linewidth=0.5) #gaussian + background
+                        
+                        temp_fits.append( [gaus[0], gaus_p_background[0], background_line] )
                         
                         fig.canvas.draw()
                         
-                                        
+                if event.key == 'F': # store the fits
+                    
+                    for fit in temp_fits:
+                        stored_fits.append(fit)
+                    # change the color of the lines to purple
+                    
+                    for fit in temp_fits:
+                        for line in fit:
+                            line.set_color('purple')
+                    fig.canvas.draw()
+                    
+                    temp_fits.clear()
+                        
+                if event.key == 'g': # snake game
+
+                    self.snake()
+
         ax.figure.canvas.mpl_connect('key_press_event', on_key)
             
-        if ax is None:
-            fig.tight_layout()
-            self.figures.append(fig)
+        fig.tight_layout()
+        self.figures.append(fig)
 
         return
                 
@@ -620,11 +646,195 @@ class Histogrammer:
 
         return cal_data
 
-df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
-# df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+    def snake(self):
+        import pygame
+        import time
+        import random
+        
+        snake_speed = 15
+        
+        # Window size
+        window_x = 720
+        window_y = 480
+        
+        # defining colors
+        black = pygame.Color(0, 0, 0)
+        white = pygame.Color(255, 255, 255)
+        red = pygame.Color(255, 0, 0)
+        green = pygame.Color(0, 255, 0)
+        blue = pygame.Color(0, 0, 255)
+        
+        garnet = pygame.Color(120, 47, 64)
+        gold = pygame.Color(206, 184, 136)
+        
+        # Initialising pygame
+        pygame.init()
+        
+        # Initialise game window
+        pygame.display.set_caption('Snake')
+        game_window = pygame.display.set_mode((window_x, window_y))
+        
+        # FPS (frames per second) controller
+        fps = pygame.time.Clock()
+        
+        # defining snake default position
+        snake_position = [100, 50]
+        
+        # defining first 4 blocks of snake body
+        snake_body = [[100, 50],
+                    [90, 50],
+                    [80, 50],
+                    [70, 50]
+                    ]
+        # fruit position
+        fruit_position = [random.randrange(1, (window_x//10)) * 10,
+                        random.randrange(1, (window_y//10)) * 10]
+        
+        fruit_spawn = True
+        
+        # setting default snake direction towards
+        # right
+        direction = 'RIGHT'
+        change_to = direction
+        
+        # initial score
+        score = 0
+        
+        # displaying Score function
+        def show_score(choice, color, font, size):
+        
+            # creating font object score_font
+            score_font = pygame.font.SysFont(font, size)
+            
+            # create the display surface object
+            # score_surface
+            score_surface = score_font.render('Score : ' + str(score), True, color)
+            
+            # create a rectangular object for the text
+            # surface object
+            score_rect = score_surface.get_rect()
+            
+            # displaying text
+            game_window.blit(score_surface, score_rect)
+        
+        # game over function
+        def game_over():
+        
+            # creating font object my_font
+            my_font = pygame.font.SysFont('times new roman', 50)
+            
+            # creating a text surface on which text
+            # will be drawn
+            game_over_surface = my_font.render(
+                'Your Score is : ' + str(score), True, red)
+            
+            # create a rectangular object for the text
+            # surface object
+            game_over_rect = game_over_surface.get_rect()
+            
+            # setting position of the text
+            game_over_rect.midtop = (window_x/2, window_y/4)
+            
+            # blit will draw the text on screen
+            game_window.blit(game_over_surface, game_over_rect)
+            pygame.display.flip()
+            
+            # after 2 seconds we will quit the program
+            time.sleep(2)
+            
+            # deactivating pygame library
+            pygame.quit()
+            
+            # quit the program
+            quit()
+        
+        
+        # Main Function
+        while True:
+            
+            # handling key events
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP:
+                        change_to = 'UP'
+                    if event.key == pygame.K_DOWN:
+                        change_to = 'DOWN'
+                    if event.key == pygame.K_LEFT:
+                        change_to = 'LEFT'
+                    if event.key == pygame.K_RIGHT:
+                        change_to = 'RIGHT'
+        
+            # If two keys pressed simultaneously
+            # we don't want snake to move into two
+            # directions simultaneously
+            if change_to == 'UP' and direction != 'DOWN':
+                direction = 'UP'
+            if change_to == 'DOWN' and direction != 'UP':
+                direction = 'DOWN'
+            if change_to == 'LEFT' and direction != 'RIGHT':
+                direction = 'LEFT'
+            if change_to == 'RIGHT' and direction != 'LEFT':
+                direction = 'RIGHT'
+        
+            # Moving the snake
+            if direction == 'UP':
+                snake_position[1] -= 10
+            if direction == 'DOWN':
+                snake_position[1] += 10
+            if direction == 'LEFT':
+                snake_position[0] -= 10
+            if direction == 'RIGHT':
+                snake_position[0] += 10
+        
+            # Snake body growing mechanism
+            # if fruits and snakes collide then scores
+            # will be incremented by 10
+            snake_body.insert(0, list(snake_position))
+            if snake_position[0] == fruit_position[0] and snake_position[1] == fruit_position[1]:
+                score += 10
+                fruit_spawn = False
+            else:
+                snake_body.pop()
+                
+            if not fruit_spawn:
+                fruit_position = [random.randrange(1, (window_x//10)) * 10,
+                                random.randrange(1, (window_y//10)) * 10]
+                
+            fruit_spawn = True
+            game_window.fill(gold)
+            
+            for pos in snake_body:
+                pygame.draw.rect(game_window, garnet,
+                                pygame.Rect(pos[0], pos[1], 10, 10))
+            pygame.draw.rect(game_window, black, pygame.Rect(
+                fruit_position[0], fruit_position[1], 10, 10))
+        
+            # Game Over conditions
+            if snake_position[0] < 0 or snake_position[0] > window_x-10:
+                game_over()
+            if snake_position[1] < 0 or snake_position[1] > window_y-10:
+                game_over()
+        
+            # Touching the snake body
+            for block in snake_body[1:]:
+                if snake_position[0] == block[0] and snake_position[1] == block[1]:
+                    game_over()
+        
+            # displaying score continuously
+            show_score(1, black, 'times new roman', 20)
+        
+            # Refresh game screen
+            pygame.display.update()
+        
+            # Frame Per Second /Refresh Rate
+            fps.tick(snake_speed)
+            
+            pass
+
+# df = pl.read_parquet("~/SanDisk/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+df = pl.read_parquet("~/Projects/52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
 
 #52Cr(d,p)53Cr, 8.3 kG field 
-xavg_ECal_Para = [-0.0023904378617156377,-18.49776562220117, 1357.4874219091237]
 xavg_ECal_Para = [-0.0023904378617156377,-18.49776562220117, 1457.4874219091237]
 
 a, b, c = xavg_ECal_Para
@@ -666,7 +876,7 @@ h = Histogrammer()
 # ax = ax.flatten()
 
 # h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000))
-# h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
+h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
 
 # h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
 
@@ -675,9 +885,9 @@ h = Histogrammer()
 
 
 # fig, axs = plt.subplots(1,1, figsize=(5,5))
-fig1, axs1 = plt.subplots(1,1, figsize=(5,5))
+# fig1, axs1 = plt.subplots(1,1, figsize=(10,5))
 
-h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000), subplots=(fig1,axs1))
+# h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000), subplots=(fig1,axs1))
 
 # h.histo2d(data=pg_data, bins=[400,400], range=[[0,5200], [0,5200]], subplots=(fig,axs), xlabel=r"$^{53}$Cr Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]",display_stats=False)
 
@@ -709,6 +919,4 @@ plt.show()
 
 
 # '''
-
-
 
