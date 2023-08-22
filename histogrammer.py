@@ -8,24 +8,22 @@ from lmfit.models import GaussianModel, LinearModel, Model
 from lmfit.model import save_modelresult, load_modelresult
 from lmfit.model import save_model, load_model
 import os
-import tempfile
-import ROOT
 
-# tex_fonts = {
-#                 # Use LaTeX to write all text
-#                 # "text.usetex": True,
-#                 "font.family": "serif",
-#                 "font.serif" : ["CMR10"],
-#                 # Use 10pt font in plots, to match 10pt font in document
-#                 "axes.labelsize": 6,
-#                 "font.size": 5,
-#                 # Make the legend/label fonts a little smaller
-#                 "legend.fontsize": 6,
-#                 "xtick.labelsize": 6,
-#                 "ytick.labelsize": 6
-#             }
+tex_fonts = {
+                # Use LaTeX to write all text
+                "text.usetex": True,
+                "font.family": "serif",
+                "font.serif": "Computer Modern Roman",
+                # Use 10pt font in plots, to match 10pt font in document
+                "axes.labelsize": 6,
+                "font.size": 4,
+                # Make the legend/label fonts a little smaller
+                "legend.fontsize": 6,
+                "xtick.labelsize": 6,
+                "ytick.labelsize": 6
+            }
 
-# plt.rcParams.update(tex_fonts)
+plt.rcParams.update(tex_fonts)
 
 
 class Histogrammer:
@@ -43,7 +41,6 @@ class Histogrammer:
         plt.rcParams['keymap.yscale'].remove('l')
             
         self.figures = []
-        self.cursor = None
             
     def guassian(self, x, volume, mean, fwhm, bin_width):
 

@@ -71,13 +71,13 @@ h = Histogrammer()
 
 
 # ''' 52Cr(d,p)53Cr, 8.3 kG field particle-gamma matrix
-# fig, axs = plt.subplots(figsize=(2.8919330289193304, 2.8919330289193304))
+fig, axs = plt.subplots(figsize=(2.8919330289193304, 2.8919330289193304))
 
-fig, axs = plt.subplots(figsize=(6, 6))
+# fig, axs = plt.subplots(figsize=(6, 6))
 
-h.histo2d(data=pg_data, bins=[400,500], range=[[0,5200], [0,5200]], subplots=(fig,axs), xlabel=r"$^{53}$Cr Excitation Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]",display_stats=False)
+h.histo2d(data=pg_data, bins=[450,550], range=[[0,5500], [0,5500]], subplots=(fig,axs), xlabel=r"$^{53}$Cr Excitation Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]",display_stats=False)
 
-x = np.linspace(0,5200,5200)
+x = np.linspace(0,5500,5500)
 gs = x 
 first_excited = x - 564
 second_excited = x - 1006
@@ -86,14 +86,15 @@ third_excited = x - 1289
 axs.plot(x,gs, color='#17a657',             linewidth=0.5, label=r'$\gamma$ decay to $\frac{3}{2}^{-}$', alpha=0.8, linestyle='-')
 axs.plot(x,first_excited, color='#751a9c',  linewidth=0.5, label=r'$\gamma$ decay to $\frac{1}{2}^{-}$', alpha=0.8, linestyle='--')
 axs.plot(x,second_excited, color='#a61753', linewidth=0.5, label=r'$\gamma$ decay to $\frac{5}{2}^{-}$', alpha=0.8, linestyle='-.')
-axs.plot(x,third_excited, color='#251a9c',  linewidth=1, label=r'$\gamma$ decay to $\frac{7}{2}^{-}$', alpha=0.8, linestyle=':')
+axs.plot(x,third_excited, color='#de8407',  linewidth=1, label=r'$\gamma$ decay to $\frac{7}{2}^{-}$', alpha=0.8, linestyle=':')
 
 offset = 200
-axs.text(564,  564+offset,  r"564 keV (J$^{\pi}$=$\frac{1}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center',bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8,  ec="none" ))
-axs.text(1006,1006+offset,r"1006 keV (J$^{\pi}$=$\frac{5}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8,  ec="none" ))
-axs.text(2320,2320+offset,r"2320 keV (J$^{\pi}$=$\frac{3}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8,  ec="none" ))
-axs.text(3706,3706+offset,r"3706 keV (J$^{\pi}$=$\frac{9}{2}^{+}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0,  ec="none" ))
-axs.vlines(3700,2600,3706+offset-50, color='#996122', linewidth=0.5, alpha=1, linestyle='--')
+axs.text(564,  564+offset,  r"564 keV (J$^{\pi}$=$\frac{1}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center',bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=1,  ec="none" ))
+axs.text(1006,1006+offset,r"1006 keV (J$^{\pi}$=$\frac{5}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=1,  ec="none" ))
+axs.text(1300,1300+offset,r"1289 keV (J$^{\pi}$=$\frac{7}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=1,  ec="none" ))
+axs.text(2320,2320+offset,r"2320 keV (J$^{\pi}$=$\frac{3}{2}^{-}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=1,  ec="none" ))
+axs.text(3706,3706+offset,r"3707 keV (J$^{\pi}$=$\frac{9}{2}^{+}$)", rotation=90, verticalalignment='bottom', horizontalalignment='center', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=1,  ec="none" ))
+axs.vlines(3700,2600,3706+offset-50, color='#1cadba', linewidth=0.5, alpha=1, linestyle='--')
 axs.legend(loc='upper left',shadow=False, frameon=True, fancybox=False, edgecolor='none', facecolor='none')
 
 fig.subplots_adjust(top=0.995,
@@ -108,9 +109,11 @@ axs.tick_params(axis='both',which='minor',direction='in',top=True,right=True,lef
 axs.tick_params(axis='both',which='major',direction='in',top=True,right=True,left=True,bottom=True,length=4)
 
 
-# plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.pdf",format='pdf')
-# plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.png",format='png',dpi=1200)
+plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.pdf",format='pdf')
+plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.png",format='png',dpi=1200)
 
 
 # '''
+
+
 plt.show()
