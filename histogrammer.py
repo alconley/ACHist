@@ -349,8 +349,6 @@ class Histogrammer:
                                                                 amplitude=init_para[3],
                                                                 area=4000))
                                     
-                                    
-
                                 gaussian_models.append(gauss)
                                 
                             # Create the composite model by adding all Gaussian models together
