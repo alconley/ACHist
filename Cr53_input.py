@@ -73,11 +73,11 @@ h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000), subplots=(
 
 
 ''' 52Cr(d,p)53Cr, 8.3 kG field particle-gamma matrix
-fig, axs = plt.subplots(figsize=(2.8919330289193304, 2.8919330289193304))
+# fig, axs = plt.subplots(figsize=(2.8919330289193304, 2.8919330289193304))
 
-# fig, axs = plt.subplots(figsize=(6, 6))
+fig, axs = plt.subplots(figsize=(6, 6))
 
-h.histo2d(data=pg_data, bins=[450,550], range=[[0,5500], [0,5500]], subplots=(fig,axs), xlabel=r"$^{53}$Cr Excitation Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]",display_stats=False)
+h.histo2d(data=pg_data, bins=[450,550], range=[[0,5500], [0,5500]], subplots=(fig,axs), xlabel=r"$^{53}$Cr Excitation Energy [keV]",ylabel=r"$\gamma$-ray Energy [keV]",display_stats=False, cbar=False)
 
 x = np.linspace(0,5500,5500)
 gs = x 
