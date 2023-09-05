@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from lmfit.models import GaussianModel, LinearModel, Model
-from lmfit.model import save_modelresult, load_modelresult
-from lmfit.model import save_model, load_model
+from lmfit.model import save_modelresult, load_modelresult, save_model, load_model
 import os
 from colorama import Fore, Style
 
@@ -100,10 +99,8 @@ class Histogrammer:
                 filtered_data = data[(data >= x_lims[0]) & (data <= x_lims[1])] # Filter the data based on the new x-axis limits
                 
                 new_counts, _ = np.histogram(filtered_data, bins=bins, range=(x_lims[0], x_lims[1]))  # Calculate the new counts
-                
-                hist_counts[:] = new_counts  # Update the counts variable
-            
-                stats = f"Mean: {np.mean(filtered_data):.2f}\nStd Dev: {np.std(filtered_data):.2f}\nIntegral: {np.sum(hist_counts):.0f}"
+                            
+                stats = f"Mean: {np.mean(filtered_data):.2f}\nStd Dev: {np.std(filtered_data):.2f}\nIntegral: {np.sum(new_counts):.0f}"
                 
                 text_box.set_text(stats)
                                 
@@ -285,7 +282,6 @@ class Histogrammer:
                         
                         try:
                        
-                    
                             def hist_counts_subtracted_value(number): # get the value of the closest bin to the peak posititon
                                 index = np.argmin(np.abs(hist_bin_centers - number))
                                 value = hist_counts_subtracted[index]
@@ -319,7 +315,6 @@ class Histogrammer:
                                 max_index = np.argmax(hist_counts_subtracted[fit_range])
                                 
                                 peak_positions.append(hist_bin_centers[fit_range][max_index])
-                            
                             
                             total_peak_height = 0
                             for i, peak_position in enumerate(peak_positions):
@@ -386,16 +381,18 @@ class Histogrammer:
                                 fit_peak_line = ax.axvline(x=result.params[f'{prefix}center'].value, color='purple', linewidth=0.5) # adjust the peak to be the center of the fit
                                 peak_markers.append(fit_peak_line)
                                 
-                                temp_fit_id = f"temp_fit_{len(temp_fits)}"
-                                temp_fits[temp_fit_id] = {
-                                    "fit_model": composite_model,
-                                    "fit_result": result,
-                                    "fit_line": fit_line_comp_p_background[0],
-                                    "background_model": background_model,
-                                    "background_result": background_result,
-                                    "background_line": background_line,
-                                    "fit_p_background_line": fit_p_background_line[0]
-                                }
+                                
+                            temp_fit_id = f"temp_fit_{len(temp_fits)}"
+                            temp_fits[temp_fit_id] = {
+                                "region_markers": region_markers_pos,
+                                "fit_model": composite_model,
+                                "fit_result": result,
+                                "fit_lines": fit_lines,
+                                "background_model": background_model,
+                                "background_result": background_result,
+                                "background_line": background_line,
+                                "fit_p_background_line": fit_p_background_line[0]
+                            }
                                 
                             fig.canvas.draw()
                             
@@ -408,27 +405,27 @@ class Histogrammer:
                     for fit in temp_fits:
                         stored_fits[fit_id] = temp_fits[fit]
                         
-                        # Change the color of the lines
-                        stored_fits[fit_id]["fit_line"].set_color('purple')
+                        for i, fit in enumerate(stored_fits[fit_id]["fit_lines"]):
+                            stored_fits[fit_id]["fit_lines"][i].set_color('purple')
+                            ax.add_line(stored_fits[fit_id]["fit_lines"][i])
+                            
                         stored_fits[fit_id]["background_line"].set_color('purple')
-                        stored_fits[fit_id]["fit_p_background_line"].set_color('purple')
-                                    
-                        # Draw the stored fit lines      
-                        ax.add_line(stored_fits[fit_id]["fit_line"])
                         ax.add_line(stored_fits[fit_id]["background_line"])
+                        
+                        stored_fits[fit_id]["fit_p_background_line"].set_color('purple')
                         ax.add_line(stored_fits[fit_id]["fit_p_background_line"])
-                    
+                        
+
                     fig.canvas.draw()
                     
                 if event.key == "S":  # Save fits to file
                     if stored_fits:
                         formatted_results = {}  # Initialize a dictionary to store combined results
-
                         for fit_id, fit_data in stored_fits.items():
-                            model_filename = f'{fit_id}_model.sav'
-                            background_model_filename = f'{fit_id}_background_model.sav'
-                            result_filename = f'{fit_id}_result.sav'
-                            background_result_filename = f'{fit_id}_background_result.sav'
+                            model_filename = f'temp_{fit_id}_model.sav'
+                            background_model_filename = f'temp_{fit_id}_background_model.sav'
+                            result_filename = f'temp_{fit_id}_result.sav'
+                            background_result_filename = f'temp_{fit_id}_background_result.sav'
 
                             # Save model, background model, fit result, and background result
                             save_model(fit_data["fit_model"], model_filename)
@@ -443,15 +440,14 @@ class Histogrammer:
                                 fit_parameters[param_name] = param_value.value
                                 fit_parameters[f"{param_name}_uncertainty"] = param_value.stderr
 
-                            area = fit_params['amplitude'].value / hist_bin_width
-                            area_uncertainty = fit_params['amplitude'].stderr / hist_bin_width
+                            # fit_parameters["volume"] = fit_params['amplitude'].value / hist_bin_width
+                            # fit_parameters["volume_uncertainty"] = fit_params['amplitude'].stderr / hist_bin_width
 
-                            fit_parameters["volume"] = area
-                            fit_parameters["volume_uncertainty"] = area_uncertainty
-
+                            
                             # Append the saved contents to the formatted_results dictionary
                             formatted_results[fit_id] = {
                                 "fit_parameters": fit_parameters,
+                                "region_markers": fit_data["region_markers"],
                                 "fit_model": open(model_filename, 'r').read(),
                                 "background_model": open(background_model_filename, 'r').read(),
                                 "fit_result": open(result_filename, 'r').read(),
@@ -464,27 +460,29 @@ class Histogrammer:
                             os.remove(result_filename)
                             os.remove(background_result_filename)
 
-                        filename = input("Enter a filename to save the fits to: ")
+                        filename = input(f"{Fore.YELLOW}{Style.BRIGHT}Enter a filename to save the fits to: {Style.RESET_ALL}")
+                        
                         # Save the formatted_results dictionary to a new file
-                        with open(f"{filename}.sav", "w") as output_file:
+                        with open(f"{filename}", "w") as output_file:
                             output_file.write(str(formatted_results))
-                        print(f"Saved fits to file: {filename}.sav")
-
+                        print(f"{Fore.GREEN}{Style.BRIGHT}Saved fits to file: {filename} {Style.RESET_ALL}")
                     else:
-                        print("No fits to save")
+                        print(f"{Fore.RED}{Style.BRIGHT}No fits to save{Style.RESET_ALL}")
+                        
                     
                 if event.key == "L":  # Load fits from file
-                    filename = input("Enter the filename to load fits from: ")
+                    filename = input(f"{Fore.YELLOW}{Style.BRIGHT}Enter the filename to load fits from: {Style.RESET_ALL}")
                     
-                    if os.path.exists(f"{filename}.sav"):
-                        with open(f"{filename}.sav", "r") as input_file:
+                    if os.path.exists(f"{filename}"):
+                        with open(f"{filename}", "r") as input_file:
                             loaded_fits = eval(input_file.read())
                             
                             for fit_id, fit_data in loaded_fits.items():
-                                model_filename = f'{fit_id}_model.sav'
-                                background_model_filename = f'{fit_id}_background_model.sav'
-                                result_filename = f'{fit_id}_result.sav'
-                                background_result_filename = f'{fit_id}_background_result.sav'
+                                print('Fit id: ',fit_id)
+                                model_filename = f'temp_{fit_id}_model.sav'
+                                background_model_filename = f'temp_{fit_id}_background_model.sav'
+                                result_filename = f'temp_{fit_id}_result.sav'
+                                background_result_filename = f'temp_{fit_id}_background_result.sav'
                                 
                                 # Save model and result data to temporary files
                                 with open(model_filename, "w") as temp_file:
@@ -508,30 +506,57 @@ class Histogrammer:
                                 os.remove(result_filename)
                                 os.remove(background_result_filename)
                                 
-                                # Draw the fits
-                                x = np.linspace(loaded_fit_result.params['center'].value - 4 * loaded_fit_result.params['sigma'].value,
-                                                loaded_fit_result.params['center'].value + 4 * loaded_fit_result.params['sigma'].value, 1000)
+                                loaded_region_markers = fit_data['region_markers']
                                 
-                                loaded_fit_line = plt.plot(x, loaded_fit_result.eval(x=x), color='red', linewidth=0.5)  # Just the gaussian
-                                loaded_fit_p_background_line = plt.plot(x, loaded_fit_result.eval(x=x) + loaded_fit_background_result.eval(x=x), 'red', linewidth=0.5)  # gaussian + background
-                                loaded_fit_background_line = plt.plot(x, loaded_fit_background_result.eval(x=x), 'green', linewidth=0.5)  # background
                                 
-                                fit_lines.extend([loaded_fit_line[0], loaded_fit_p_background_line[0], loaded_fit_background_line[0]])
+                                loaded_total_x = np.linspace(loaded_region_markers[0], loaded_region_markers[1], 2000)
+                                loaded_fit_p_background_line = plt.plot(loaded_total_x, loaded_fit_result.eval(x=loaded_total_x) + loaded_fit_background_result.eval(x=loaded_total_x), color='red', linewidth=0.5) 
+                                loaded_fit_background_line = plt.plot(loaded_total_x, loaded_fit_background_result.eval(x=loaded_total_x), 'green', linewidth=0.5)
+                                
+                                
+                                # Get the parameter names
+                                param_names = loaded_fit_result.params.keys()
+
+                                # Initialize a set to collect unique prefixes
+                                unique_prefixes = set()
+
+                                # Iterate through parameter names and extract prefixes
+                                for param_name in param_names:
+                                    # Split the parameter name by '_' to get the prefix
+                                    parts = param_name.split('_')
+                                    
+                                    if len(parts) > 1:
+                                        # Add the prefix to the set
+                                        unique_prefixes.add(parts[0])
+
+                                for i, pre in  enumerate(unique_prefixes):
+                                    
+                                    prefix = f"{pre}_"
+                                    
+                                    sigma_plot_width = 5
+                                    loaded_x_comp = np.linspace(loaded_fit_result.params[f'{prefix}center'].value - sigma_plot_width * loaded_fit_result.params[f'{prefix}sigma'].value,
+                                                                loaded_fit_result.params[f'{prefix}center'].value + sigma_plot_width * loaded_fit_result.params[f'{prefix}sigma'].value, 1000)
+                                                                
+                                    loaded_components = loaded_fit_result.eval_components(x=loaded_x_comp)
+                                    
+                                    loaded_fit_line_comp_p_background = plt.plot(loaded_x_comp, loaded_components[prefix]+ loaded_fit_background_result.eval(x=loaded_x_comp), color='red', linewidth=0.5)  # Gaussian and background
+                                    fit_lines.append(loaded_fit_line_comp_p_background[0])
                                 
                                 temp_fit_id = f"temp_fit_{len(temp_fits)}"
                                 temp_fits[temp_fit_id] = {
+                                    "region_markers": loaded_region_markers,
                                     "fit_model": loaded_fit_model,
                                     "fit_result": loaded_fit_result,
-                                    "fit_line": loaded_fit_line[0],
+                                    "fit_lines": fit_lines,
                                     "background_model": loaded_fit_background_model,
                                     "background_result": loaded_fit_background_result,
                                     "background_line": loaded_fit_background_line[0],
                                     "fit_p_background_line": loaded_fit_p_background_line[0]
                                 }
-                                
+
                                 fig.canvas.draw()
                             
-                            print(f"Loaded {len(loaded_fits)} fits from file: {filename}.sav")
+                            print(f"{Fore.GREEN}{Style.BRIGHT}Loaded {len(loaded_fits)} fits from file: {filename}{Style.RESET_ALL}")
         
         ax.figure.canvas.mpl_connect('key_press_event', on_key)
             
@@ -550,8 +575,9 @@ class Histogrammer:
         ylabel: str = None,
         subplots:(plt.figure,plt.Axes) = None,
         display_stats: bool = True,
-        save_histogram:bool = False,
+        save_histogram: bool = False,
         cmap: str = None,
+        cbar: bool = True,
         ):
 
         import matplotlib.colors as colors
@@ -571,10 +597,14 @@ class Histogrammer:
             
         if cmap is None: "viridis"
             
+            
         # draw a 2d histogram and add a similar stat bar to the 2d histogram, just the intergral though
-        ax.hist2d(x_data, y_data, bins=bins, range=range, cmap=cmap, norm=colors.LogNorm())
+        h = ax.hist2d(x_data, y_data, bins=bins, range=range, cmap=cmap, norm=colors.LogNorm())
         
-        
+        if cbar:
+            fig.colorbar(h[3], ax=ax)
+            
+            
         ax.set_xlim(range[0])
         ax.set_ylim(range[1])
         ax.set_xlabel(xlabel)
@@ -667,7 +697,7 @@ class Histogrammer:
                     
                     plt.show()
                     
-            if event.inaxes is ax and event.key == 'x': # For drawing lines to do a y-projection
+            if event.inaxes is ax and event.key == 'x': # For drawing lines to do a x-projection
                 # Check if there are already two lines present
                 if len(added_x_lines) >= 2:
                     # If two lines are present, remove them from the plot and the list
