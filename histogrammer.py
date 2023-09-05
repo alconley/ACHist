@@ -3,8 +3,9 @@ import polars as pl
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from lmfit.models import GaussianModel, LinearModel, Model
+from lmfit.models import GaussianModel, LinearModel
 from lmfit.model import save_modelresult, load_modelresult, save_model, load_model
+from scipy.signal import find_peaks
 import os
 from colorama import Fore, Style
 
@@ -140,7 +141,7 @@ class Histogrammer:
             background_x_values = np.linspace(background_pos[0], background_pos[-1], 1000)
             background_values = background_result.eval(x=background_x_values)
             background_line = plt.plot(background_x_values, background_values, color='green', linewidth=0.5)
-                                    
+                        
             return background_result, background_model, background_line[0]
 
         def on_key(event):  # Function to handle fitting gaussians
@@ -158,6 +159,10 @@ class Histogrammer:
                 'p': {
                     'description': "Add peak marker",
                     'note': "If no peak markers are supplied, the program will assume there is one peak at the maximum value",
+                },
+                'P': {
+                    'description': "Auto peak finder",
+                    'note': "Trys to find all the peaks between the region markers",
                 },
                 '-': {
                     'description': "Remove all markers and temp fits",
@@ -183,7 +188,7 @@ class Histogrammer:
                     'description': "Load fits from file",
                     'note': "",
                 },
-                'h': {
+                'space-bar': {
                     'description': "Show keybindings help",
                     'note': "",
                 },
@@ -201,24 +206,60 @@ class Histogrammer:
                         
             if event.inaxes is not None:
                 
-                if event.key == 'h': # display the help cheat sheet
+                if event.key == ' ': # display the help cheat sheet
                     show_keybindings_help()
                    
                 if event.key == 'r': # region markers
                     
                     if len(region_markers) >= 2:
+                        print(f"{Fore.BLUE}Removed region markers{Style.RESET_ALL}")
+                        
                         remove_lines(region_markers)  # If two lines are present, remove them from the plot and the list
                                         
                     region_pos = event.xdata       
-                    region_line = ax.axvline(region_pos, color='#0B00E9', linewidth=0.5)
+                    region_line = ax.axvline(region_pos, color='blue', linewidth=0.5)
+                    print(f"{Fore.BLUE}Region marker placed at {region_pos}{Style.RESET_ALL}")
                     region_line.set_antialiased(False)
                     region_markers.append(region_line)
                     fig.canvas.draw()
-                    
+
+                if event.key == 'P': # auto fit peaks 
+                    if len(region_markers) != 2:
+                        print(f"{Fore.RED}{Style.BRIGHT}Must have two region markers!{Style.RESET_ALL}")
+                    else:
+                        region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
+                        region_markers_pos.sort()
+                        
+                        fit_range = (hist_bin_centers >= region_markers_pos[0]) & (hist_bin_centers <= region_markers_pos[1])
+                        
+                        
+                        if not background_markers: # if no background markers/fit estimate the background at the region markers
+                            remove_lines(background_lines)
+                            background_result, background_model, background_line = fit_background(region_markers, hist_counts, hist_bin_centers)
+                            background_lines.append(background_line)
+                        else:
+                            remove_lines(background_lines)
+                            background_result, background_model, background_line = fit_background(background_markers, hist_counts, hist_bin_centers)
+                            background_lines.append(background_line)
+
+                        hist_counts_subtracted = hist_counts - background_result.eval(x=hist_bin_centers)
+                        
+                        peak_find_hist = hist_counts_subtracted[fit_range]
+                        peak_find_hist_bin_centers = hist_bin_centers[fit_range]
+                        peaks, _ = find_peaks(x=peak_find_hist, height=np.max(peak_find_hist)*0.05, threshold=0.05)
+                                                
+                        for peak in peak_find_hist_bin_centers[peaks]:
+                            peak_line = ax.axvline(x=peak, color='purple', linewidth=0.5)
+                            peak_line.set_antialiased(False)
+                            peak_markers.append(peak_line)
+                        
+                        fig.canvas.draw()
+                        
                 if event.key == 'b': # background markers
 
                     pos = event.xdata           
                     background_line = ax.axvline(x=pos, color='green', linewidth=0.5)
+                    print(f"{Fore.GREEN}Background marker placed at {pos}{Style.RESET_ALL}")
                     background_line.set_antialiased(False)
                     background_markers.append(background_line)
                     fig.canvas.draw()
@@ -227,6 +268,8 @@ class Histogrammer:
 
                     pos = event.xdata
                     peak_line = ax.axvline(x=pos, color='purple', linewidth=0.5)
+                    print(f"{Fore.MAGENTA}Peak marker placed at {pos}{Style.RESET_ALL}")
+                    
                     peak_line.set_antialiased(False)
                     peak_markers.append(peak_line)
                     fig.canvas.draw()
@@ -245,6 +288,7 @@ class Histogrammer:
                     
                     remove_lines(background_lines)
                     background_result, background_model, background_line = fit_background(background_markers, hist_counts, hist_bin_centers)
+                    
                     background_lines.append(background_line)                    
                     fig.canvas.draw()
                              
@@ -253,7 +297,7 @@ class Histogrammer:
                     remove_lines(fit_lines)
                     
                     if len(region_markers) != 2:
-                        print("Must have two region markers!")
+                        print(f"{Fore.RED}{Style.BRIGHT}Must have two region markers!{Style.RESET_ALL}")
                     else:
                         region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
                         region_markers_pos.sort()
@@ -328,7 +372,7 @@ class Histogrammer:
                                 gauss = GaussianModel(prefix=f'g{i}_')
                                 
                                 amp_scale = hist_counts_subtracted_value(peak_position)/total_peak_height
-                                init_para = initial_para(peak_position,peak_position_guess_uncertainty=4*hist_bin_width, amplitude_scale=amp_scale)   
+                                init_para = initial_para(peak_position,peak_position_guess_uncertainty=2*hist_bin_width, amplitude_scale=amp_scale)   
                                     
                                 if i == 0:
                                     params = gauss.make_params(sigma=init_para[0],
@@ -356,10 +400,10 @@ class Histogrammer:
                             
                             # plot result on top of the background
                             total_x = np.linspace(region_markers_pos[0], region_markers_pos[1],2000)
-                            fit_p_background_line = plt.plot(total_x, result.eval(x=total_x) + background_result.eval(x=total_x), color='red', linewidth=0.5) 
+                            fit_p_background_line = plt.plot(total_x, result.eval(x=total_x) + background_result.eval(x=total_x), color='blue', linewidth=0.5) 
                             fit_lines.append(fit_p_background_line[0])
                             
-                            print(print(f"{Fore.GREEN}{Style.BRIGHT}Fit Report{Style.RESET_ALL}"))
+                            print(f"{Fore.GREEN}{Style.BRIGHT}Fit Report{Style.RESET_ALL}")
                             print(result.fit_report())
                             
                             # Decomposition of gaussians
@@ -375,7 +419,7 @@ class Histogrammer:
                                 # fit_line_comp = plt.plot(x_comp, components[prefix]+ background_result.eval(x=x_comp), color='purple', linewidth=0.5)  # Gaussian without background
                                 # fit_lines.append(fit_line_comp[0])
                                 
-                                fit_line_comp_p_background = plt.plot(x_comp, components[prefix]+ background_result.eval(x=x_comp), color='red', linewidth=0.5)  # Gaussian and background
+                                fit_line_comp_p_background = plt.plot(x_comp, components[prefix]+ background_result.eval(x=x_comp), color='blue', linewidth=0.5)  # Gaussian and background
                                 fit_lines.append(fit_line_comp_p_background[0])
 
                                 fit_peak_line = ax.axvline(x=result.params[f'{prefix}center'].value, color='purple', linewidth=0.5) # adjust the peak to be the center of the fit
@@ -406,13 +450,13 @@ class Histogrammer:
                         stored_fits[fit_id] = temp_fits[fit]
                         
                         for i, fit in enumerate(stored_fits[fit_id]["fit_lines"]):
-                            stored_fits[fit_id]["fit_lines"][i].set_color('purple')
+                            stored_fits[fit_id]["fit_lines"][i].set_color('m')
                             ax.add_line(stored_fits[fit_id]["fit_lines"][i])
                             
-                        stored_fits[fit_id]["background_line"].set_color('purple')
+                        stored_fits[fit_id]["background_line"].set_color('m')
                         ax.add_line(stored_fits[fit_id]["background_line"])
                         
-                        stored_fits[fit_id]["fit_p_background_line"].set_color('purple')
+                        stored_fits[fit_id]["fit_p_background_line"].set_color('m')
                         ax.add_line(stored_fits[fit_id]["fit_p_background_line"])
                         
 
@@ -469,7 +513,6 @@ class Histogrammer:
                     else:
                         print(f"{Fore.RED}{Style.BRIGHT}No fits to save{Style.RESET_ALL}")
                         
-                    
                 if event.key == "L":  # Load fits from file
                     filename = input(f"{Fore.YELLOW}{Style.BRIGHT}Enter the filename to load fits from: {Style.RESET_ALL}")
                     
@@ -510,7 +553,7 @@ class Histogrammer:
                                 
                                 
                                 loaded_total_x = np.linspace(loaded_region_markers[0], loaded_region_markers[1], 2000)
-                                loaded_fit_p_background_line = plt.plot(loaded_total_x, loaded_fit_result.eval(x=loaded_total_x) + loaded_fit_background_result.eval(x=loaded_total_x), color='red', linewidth=0.5) 
+                                loaded_fit_p_background_line = plt.plot(loaded_total_x, loaded_fit_result.eval(x=loaded_total_x) + loaded_fit_background_result.eval(x=loaded_total_x), color='blue', linewidth=0.5) 
                                 loaded_fit_background_line = plt.plot(loaded_total_x, loaded_fit_background_result.eval(x=loaded_total_x), 'green', linewidth=0.5)
                                 
                                 
@@ -680,7 +723,7 @@ class Histogrammer:
             if event.key == 'Y': # For showing the y-projection
                 
                 if len(added_y_lines) < 2: 
-                    print("Must have two lines dummy!")
+                    print(f"{Fore.RED}{Style.BRIGHT}Must have two lines!{Style.RESET_ALL}")
                     
                 else:
                     x_coordinates = []
@@ -720,8 +763,8 @@ class Histogrammer:
             if event.key == 'X': # For showing the X-projection
                 
                 if len(added_x_lines) < 2: 
-                    print("Must have two lines dummy!")
-                    
+                    print(f"{Fore.RED}{Style.BRIGHT}Must have two lines!{Style.RESET_ALL}")
+
                 else:
                     y_coordinates = []
                     for line in added_x_lines:
