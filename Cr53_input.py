@@ -66,11 +66,13 @@ h = Histogrammer()
 # for i in range(5):
 #     h.histo2d(data=[[det_dfs[i]["Xavg"],det_dfs[i][f"Cebra{i}EnergyCalibrated"]]] , bins=[600,250], range=[[-300,300], [0,6000]], xlabel="Xavg", ylabel=f"Cebra{i}Energy")
 
-# h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000))
+fig, axs = plt.subplots(figsize=(12, 6))
+h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000), subplots=(fig, axs))
+# h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096), subplots=(fig, axs))
 
 
 
-# ''' 52Cr(d,p)53Cr, 8.3 kG field particle-gamma matrix
+''' 52Cr(d,p)53Cr, 8.3 kG field particle-gamma matrix
 fig, axs = plt.subplots(figsize=(2.8919330289193304, 2.8919330289193304))
 
 # fig, axs = plt.subplots(figsize=(6, 6))
@@ -109,11 +111,11 @@ axs.tick_params(axis='both',which='minor',direction='in',top=True,right=True,lef
 axs.tick_params(axis='both',which='major',direction='in',top=True,right=True,left=True,bottom=True,length=4)
 
 
-plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.pdf",format='pdf')
-plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.png",format='png',dpi=1200)
+# plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.pdf",format='pdf')
+# plt.savefig(f"./histogrammer/53Cr_pg_matrix_labeled.png",format='png',dpi=1200)
 
 
-# '''
+'''
 
 
 plt.show()

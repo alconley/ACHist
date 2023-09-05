@@ -2,28 +2,28 @@
 import polars as pl
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.integrate import quad
 import os
 from lmfit.models import GaussianModel, LinearModel, Model
 from lmfit.model import save_modelresult, load_modelresult
 from lmfit.model import save_model, load_model
 import os
+from colorama import Fore, Style
 
-tex_fonts = {
-                # Use LaTeX to write all text
-                "text.usetex": True,
-                "font.family": "serif",
-                "font.serif": "Computer Modern Roman",
-                # Use 10pt font in plots, to match 10pt font in document
-                "axes.labelsize": 6,
-                "font.size": 4,
-                # Make the legend/label fonts a little smaller
-                "legend.fontsize": 6,
-                "xtick.labelsize": 6,
-                "ytick.labelsize": 6
-            }
+# tex_fonts = {
+#                 # Use LaTeX to write all text
+#                 "text.usetex": True,
+#                 "font.family": "serif",
+#                 "font.serif": "Computer Modern Roman",
+#                 # Use 10pt font in plots, to match 10pt font in document
+#                 "axes.labelsize": 6,
+#                 "font.size": 4,
+#                 # Make the legend/label fonts a little smaller
+#                 "legend.fontsize": 6,
+#                 "xtick.labelsize": 6,
+#                 "ytick.labelsize": 6
+#             }
 
-plt.rcParams.update(tex_fonts)
+# plt.rcParams.update(tex_fonts)
 
 
 class Histogrammer:
@@ -42,18 +42,6 @@ class Histogrammer:
             
         self.figures = []
             
-    def guassian(self, x, volume, mean, fwhm, bin_width):
-
-        sigma = fwhm / 2.355
-        
-        def f(x):
-            return np.exp(- 0.5 * ( (x-mean)/(sigma) )**2)
-        
-        res, err = quad(f, mean - (3*sigma), mean + (3*sigma))
-        amplitude = (volume / res) * bin_width
-        
-        return amplitude * np.exp( -(x-mean)**2 / (2*sigma**2) )
-           
     def histo1d(
         self,
         xdata: list,
@@ -73,7 +61,6 @@ class Histogrammer:
         if isinstance(xdata, np.ndarray): # handles the case for the x/y projections 
             data = xdata
             column = ""
-            print(xdata)
             
         if isinstance(xdata, pl.Series): # checks if xdata is a polars series
             data = xdata.to_numpy()
@@ -161,7 +148,64 @@ class Histogrammer:
 
         def on_key(event):  # Function to handle fitting gaussians
             
-            if event.inaxes is not None:    
+            # Define a dictionary of keybindings, their descriptions, and notes
+            keybindings = {
+                'r': {
+                    'description': "Add region marker",
+                    'note': "Must have 2 region markers to preform a fit.",
+                },
+                'b': {
+                    'description': "Add background marker",
+                    'note': "must have at least two background markers to estimate the background",
+                },
+                'p': {
+                    'description': "Add peak marker",
+                    'note': "If no peak markers are supplied, the program will assume there is one peak at the maximum value",
+                },
+                '-': {
+                    'description': "Remove all markers and temp fits",
+                    'note': "",
+                },
+                'B': {
+                    'description': "Fit background",
+                    'note': "Fits the background markers using a linear line",
+                },
+                'f': {
+                    'description': "Fit Gaussians to region",
+                    'note': "Must have two region markers. If no background markers are supplied, the background will be esitamted at the region markers. Number of Gaussians fitted will depend on the number of peak markers inbetween the region markers",
+                },
+                'F': {
+                    'description': "Store the fits",
+                    'note': "",
+                },
+                'S': {
+                    'description': "Save fits to file",
+                    'note': "Saves the stored fits to a ASCII (user must input the file name)",
+                },
+                'L': {
+                    'description': "Load fits from file",
+                    'note': "",
+                },
+                'h': {
+                    'description': "Show keybindings help",
+                    'note': "",
+                },
+            }
+
+            # Function to display the keybindings help
+            def show_keybindings_help():
+                print("\nKeybindings Help:")
+                for key, info in keybindings.items():
+                    description = info['description']
+                    note = info['note']
+                    print(f"  {Fore.YELLOW}{key}{Style.RESET_ALL}: {description}")
+                    if note:
+                        print(f"      Note: {note}")
+                        
+            if event.inaxes is not None:
+                
+                if event.key == 'h': # display the help cheat sheet
+                    show_keybindings_help()
                    
                 if event.key == 'r': # region markers
                     
@@ -169,22 +213,25 @@ class Histogrammer:
                         remove_lines(region_markers)  # If two lines are present, remove them from the plot and the list
                                         
                     region_pos = event.xdata       
-                    line = ax.axvline(region_pos, color='#0B00E9', linewidth=0.5)
-                    region_markers.append(line)
+                    region_line = ax.axvline(region_pos, color='#0B00E9', linewidth=0.5)
+                    region_line.set_antialiased(False)
+                    region_markers.append(region_line)
                     fig.canvas.draw()
                     
                 if event.key == 'b': # background markers
 
                     pos = event.xdata           
-                    line = ax.axvline(x=pos, color='green', linewidth=0.5)
-                    background_markers.append(line)
+                    background_line = ax.axvline(x=pos, color='green', linewidth=0.5)
+                    background_line.set_antialiased(False)
+                    background_markers.append(background_line)
                     fig.canvas.draw()
 
                 if event.key == 'p': # peak markers
 
                     pos = event.xdata
-                    line = ax.axvline(x=pos, color='purple', linewidth=0.5)
-                    peak_markers.append(line)
+                    peak_line = ax.axvline(x=pos, color='purple', linewidth=0.5)
+                    peak_line.set_antialiased(False)
+                    peak_markers.append(peak_line)
                     fig.canvas.draw()
                         
                 if event.key == '-': # remove all markers and temp fits
@@ -203,21 +250,29 @@ class Histogrammer:
                     background_result, background_model, background_line = fit_background(background_markers, hist_counts, hist_bin_centers)
                     background_lines.append(background_line)                    
                     fig.canvas.draw()
-                      
-                if event.key == 'f':  # Fit Gaussian to region
+                             
+                if event.key == 'f':  # Fit Gaussians to region
                     remove_lines(background_lines)
                     remove_lines(fit_lines)
-                    remove_lines(peak_markers)
-
+                    
                     if len(region_markers) != 2:
                         print("Must have two region markers!")
                     else:
                         region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
                         region_markers_pos.sort()
+                        
+                        # removes peak markers that are not in between the region markers
+                        peak_positions = []
+                        for marker in peak_markers:
+                            if region_markers_pos[0] < marker.get_xdata()[0] < region_markers_pos[1]:
+                                peak_positions.append(marker.get_xdata()[0])
+                        peak_positions.sort()
+                        
+                        remove_lines(peak_markers)
 
                         fit_range = (hist_bin_centers >= region_markers_pos[0]) & (hist_bin_centers <= region_markers_pos[1])
 
-                        if not background_markers:
+                        if not background_markers: # if no background markers/fit estimate the background at the region markers
                             remove_lines(background_lines)
                             background_result, background_model, background_line = fit_background(region_markers, hist_counts, hist_bin_centers)
                             background_lines.append(background_line)
@@ -227,52 +282,128 @@ class Histogrammer:
                             background_lines.append(background_line)
 
                         hist_counts_subtracted = hist_counts - background_result.eval(x=hist_bin_centers)
-
-                        model = GaussianModel()
-                        model.set_param_hint('sigma', value=np.std(hist_counts_subtracted[fit_range]))
-                        model.set_param_hint('center', value=np.mean(hist_counts_subtracted[fit_range]))
-                        model.set_param_hint('height', value=np.max(hist_counts_subtracted[fit_range]), min=0)
-                        model.set_param_hint('amplitude', value=np.sum(hist_counts_subtracted[fit_range]), min=0)
-
-                        for marker in peak_markers:
-                            if region_markers_pos[0] < marker.get_xdata()[0] < region_markers_pos[1]:
-                                model.set_param_hint('center', value=marker.get_xdata()[0])
-                                break
-
-                        result = model.fit(hist_counts_subtracted[fit_range], x=hist_bin_centers[fit_range])
-
-                        print(result.fit_report())
-                        area = result.params['amplitude'].value / hist_bin_width
-                        area_uncertainty = result.params['amplitude'].stderr / hist_bin_width
-
-                        print(f"Mean: {round(result.params['center'].value, 3)} +/- {round(result.params['center'].stderr, 3)}")
-                        print(f"FWHM: {round(result.params['fwhm'].value, 3)} +/- {round(result.params['fwhm'].stderr, 3)}")
-                        print(f"Area: {round(area)} +/- {round(area_uncertainty)}\n")
-
-                        x = np.linspace(result.params['center'].value - 4 * result.params['sigma'].value,
-                                        result.params['center'].value + 4 * result.params['sigma'].value, 1000)
-
-                        fit_line = plt.plot(x, result.eval(x=x), color='red', linewidth=0.5)  # Just the Gaussian
-                        fit_p_background_line = plt.plot(x, result.eval(x=x) + background_result.eval(x=x), 'red', linewidth=0.5)  # Gaussian + background
-
-                        line = ax.axvline(x=result.params['center'].value, color='purple', linewidth=0.5)
-                        peak_markers.append(line)
                         
-                        fit_lines.extend([fit_line[0], fit_p_background_line[0]])
+                        try:
+                       
+                    
+                            def hist_counts_subtracted_value(number): # get the value of the closest bin to the peak posititon
+                                index = np.argmin(np.abs(hist_bin_centers - number))
+                                value = hist_counts_subtracted[index]
+                                return value
 
-                        temp_fit_id = f"temp_fit_{len(temp_fits)}"
-                        temp_fits[temp_fit_id] = {
-                            "fit_model": model,
-                            "fit_result": result,
-                            "fit_line": fit_line[0],
-                            "background_model": background_model,
-                            "background_result": background_result,
-                            "background_line": background_line,
-                            "fit_p_background_line": fit_p_background_line[0]
-                        }
+                            def initial_para(peak_position, peak_position_guess_uncertainty, amplitude_scale:float=None): # estimates the initital fit parameters
+                                
+                                avg_sigma = np.sum(hist_counts_subtracted[fit_range]) / np.std(hist_counts_subtracted[fit_range])
 
-                        fig.canvas.draw()
-                        
+                                sigma = dict(value=avg_sigma, min=0, max=avg_sigma * 4)
+
+                                center = dict(value=peak_position,
+                                            min=peak_position - peak_position_guess_uncertainty,
+                                            max=peak_position + peak_position_guess_uncertainty)
+
+                                height = dict(value=hist_counts_subtracted_value(peak_position),
+                                            min=hist_counts_subtracted_value(peak_position - peak_position_guess_uncertainty),
+                                            max=hist_counts_subtracted_value(peak_position + peak_position_guess_uncertainty))
+
+                                if amplitude_scale is not None:
+                                    amplitude = dict(value=hist_bin_width * np.sum(hist_counts_subtracted[fit_range])*amplitude_scale)
+                                else:   
+                                    amplitude = dict(value=hist_bin_width * np.sum(hist_counts_subtracted[fit_range]))
+
+                                return [sigma, center, height, amplitude]
+                            
+                            # if there are no peak positions, assume there is one peak in the region markers at the max value
+                            if len(peak_positions) == 0: 
+                                
+                                # Find the index where the maximum value occurs
+                                max_index = np.argmax(hist_counts_subtracted[fit_range])
+                                
+                                peak_positions.append(hist_bin_centers[fit_range][max_index])
+                            
+                            
+                            total_peak_height = 0
+                            for i, peak_position in enumerate(peak_positions):
+                                total_peak_height += hist_counts_subtracted_value(peak_position)
+                            
+                            # Initialize the list of Gaussian models and their parameters
+                            gaussian_models = []
+                            
+                            # Loop over the peak_positions and create Gaussian models and parameters
+                            for i, peak_position in enumerate(peak_positions):
+                                gauss = GaussianModel(prefix=f'g{i}_')
+                                
+                                amp_scale = hist_counts_subtracted_value(peak_position)/total_peak_height
+                                init_para = initial_para(peak_position,peak_position_guess_uncertainty=4*hist_bin_width, amplitude_scale=amp_scale)   
+                                    
+                                if i == 0:
+                                    params = gauss.make_params(sigma=init_para[0],
+                                                                center=init_para[1],
+                                                                height=init_para[2],
+                                                                amplitude=init_para[3],
+                                                                area=4000)
+                                    
+                                else:
+                                    params.update(gauss.make_params(sigma=init_para[0],
+                                                                center=init_para[1],
+                                                                height=init_para[2],
+                                                                amplitude=init_para[3],
+                                                                area=4000))
+                                    
+                                    
+
+                                gaussian_models.append(gauss)
+                                
+                            # Create the composite model by adding all Gaussian models together
+                            composite_model = gaussian_models[0]
+                            for gauss in gaussian_models[1:]:
+                                composite_model += gauss
+
+                            # Fit the composite model to the data
+                            result = composite_model.fit(hist_counts_subtracted[fit_range], params, x=hist_bin_centers[fit_range])
+                            
+                            # plot result on top of the background
+                            total_x = np.linspace(region_markers_pos[0], region_markers_pos[1],2000)
+                            fit_p_background_line = plt.plot(total_x, result.eval(x=total_x) + background_result.eval(x=total_x), color='red', linewidth=0.5) 
+                            fit_lines.append(fit_p_background_line[0])
+                            
+                            print(print(f"{Fore.GREEN}{Style.BRIGHT}Fit Report{Style.RESET_ALL}"))
+                            print(result.fit_report())
+                            
+                            # Decomposition of gaussians
+                            for i, peak_position in enumerate(peak_positions):
+                                
+                                prefix = f'g{i}_'
+                                sigma_plot_width = 5
+                                x_comp = np.linspace(result.params[f'{prefix}center'].value - sigma_plot_width * result.params[f'{prefix}sigma'].value,
+                                    result.params[f'{prefix}center'].value + sigma_plot_width * result.params[f'{prefix}sigma'].value, 1000)
+
+                                components = result.eval_components(x=x_comp)
+
+                                # fit_line_comp = plt.plot(x_comp, components[prefix]+ background_result.eval(x=x_comp), color='purple', linewidth=0.5)  # Gaussian without background
+                                # fit_lines.append(fit_line_comp[0])
+                                
+                                fit_line_comp_p_background = plt.plot(x_comp, components[prefix]+ background_result.eval(x=x_comp), color='red', linewidth=0.5)  # Gaussian and background
+                                fit_lines.append(fit_line_comp_p_background[0])
+
+                                fit_peak_line = ax.axvline(x=result.params[f'{prefix}center'].value, color='purple', linewidth=0.5) # adjust the peak to be the center of the fit
+                                peak_markers.append(fit_peak_line)
+                                
+                                temp_fit_id = f"temp_fit_{len(temp_fits)}"
+                                temp_fits[temp_fit_id] = {
+                                    "fit_model": composite_model,
+                                    "fit_result": result,
+                                    "fit_line": fit_line_comp_p_background[0],
+                                    "background_model": background_model,
+                                    "background_result": background_result,
+                                    "background_line": background_line,
+                                    "fit_p_background_line": fit_p_background_line[0]
+                                }
+                                
+                            fig.canvas.draw()
+                            
+                        except:
+                                print(f"{Fore.RED}{Style.BRIGHT}\n⚠ Fit Failed ⚠\n{Style.RESET_ALL}")
+                                                                                 
                 if event.key == 'F': # store the fits
                     fit_id = f"Fit_{len(stored_fits)}"
                     
@@ -403,15 +534,13 @@ class Histogrammer:
                                 fig.canvas.draw()
                             
                             print(f"Loaded {len(loaded_fits)} fits from file: {filename}.sav")
-
-
+        
         ax.figure.canvas.mpl_connect('key_press_event', on_key)
             
         fig.tight_layout()
         self.figures.append(fig)
 
         return
-           
                 
     def histo2d(
         self,
@@ -428,7 +557,7 @@ class Histogrammer:
         ):
 
         import matplotlib.colors as colors
-        
+                
         # Concatenate the arrays horizontally to get the final result
         x_data = np.hstack([column[0] for column in data])
         y_data = np.hstack([column[1] for column in data])
