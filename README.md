@@ -26,7 +26,8 @@ pip install polars matplotlib lmfit numpy colorama
 
 Function in histogram class to fit multiple gaussians together with the option of saving the fits which can be loaded into the histogram later.
 
-Options: xdata: Can be formatted either as xdata=df["Column"] or xdata=[df_1["Column_i"], df_2["Column_j"],df_3["Column_k"], ...]. The latter combines the data from each df/column and plots the summed histogram.  This is especially importart when you have multiple detectors (say gamma-ray detectors) each with their own filter condition and you want to view the full statitics.
+Options: 
+-xdata: Can be formatted either as xdata=df["Column"] or xdata=[df_1["Column_i"], df_2["Column_j"],df_3["Column_k"], ...]. The latter combines the data from each df/column and plots the summed histogram.  This is especially importart when you have multiple detectors (say gamma-ray detectors) each with their own filter condition and you want to view the full statitics.
 
 ### 2d-histograms
 tbd
