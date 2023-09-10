@@ -3,6 +3,7 @@ from histogrammer import Histogrammer
 import polars as pl
 import numpy as np
 import matplotlib.pyplot as plt 
+from cmath import pi
 
 df = pl.read_parquet("./52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
 
@@ -45,12 +46,10 @@ for det in range(NumDetectors):
     pg_data.append( (det_df["XavgEnergyCalibrated"], det_df[f"Cebra{det}EnergyCalibrated"]) )
     tcut_xavg.append(det_df["XavgEnergyCalibrated"])
 
-
-
 h = Histogrammer()
 
 # timeToScintFig, timeToScintax = plt.subplots(2,3, figsize=(15,10))
-# timeToScintax = timeToScintax.fwlatten()
+# timeToScintax = timeToScintax.flatten()
 
 # for det in range(NumDetectors):
 #     h.histo1d(xdata=df[f"Cebra{det}TimetoScint"], bins=100, range=(-1200,-1100), subplots=(timeToScintFig,timeToScintax[det]), xlabel=f"Cebra{det}TimetoScint", ylabel="Counts", display_stats=False, color='k')
@@ -62,21 +61,29 @@ h = Histogrammer()
 
 # h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096))
 
-# h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
+
+
+h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
+
+df = h.filter_df_with_cut(df=df, XColumn="ScintLeftEnergy", YColumn="AnodeBackEnergy", CutFile="test.json")
+h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
+
+
+
 
 # for i in range(5):
 #     h.histo2d(data=[[det_dfs[i]["Xavg"],det_dfs[i][f"Cebra{i}EnergyCalibrated"]]] , bins=[600,250], range=[[-300,300], [0,6000]], xlabel="Xavg", ylabel=f"Cebra{i}Energy")
 
-fig, axs = plt.subplots(figsize=(12, 6))
-h.histo1d(xdata=df["Xavg"], bins=600, range=(-300,300), subplots=(fig, axs))
+# fig, axs = plt.subplots(figsize=(12, 6))
+# h.histo1d(xdata=df["Xavg"], bins=600, range=(-300,300), subplots=(fig, axs))
 
-# h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(0,6000), subplots=(fig, axs))
+# h.histo2d(data=[ (df["Xavg"],df["Theta"])], bins=[600,600], range=[ [-300,300], [0,pi/2]])
 
+# h.histo1d(xdata=df["XavgEnergyCalibrated"], bins=500, range=(-2000,6000), subplots=(fig, axs))
 
 # h.histo1d(xdata=tcut_xavg, bins=300, range=(0,6000), subplots=(fig, axs))
 
 # h.histo1d(xdata=[df["Cebra0Energy"]], bins=512, range=(0,4096), subplots=(fig, axs))
-
 
 
 # ''' 52Cr(d,p)53Cr, 8.3 kG field particle-gamma matrix

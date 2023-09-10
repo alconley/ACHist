@@ -26,9 +26,23 @@ pip install polars matplotlib lmfit numpy colorama
 
 Function in histogram class to fit multiple gaussians together with the option of saving the fits which can be loaded into the histogram later.
 
-Options: 
-- xdata: Can be formatted either as xdata=df["Column"] or xdata=[df_1["Column_i"], df_2["Column_j"],df_3["Column_k"], ...]. The latter combines the data from each df/column and plots the summed histogram.  This is especially importart when you have multiple detectors (say gamma-ray detectors) each with their own filter condition and you want to view the full statitics.
+Variables: 
+- xdata: Can be formatted either as xdata=df["Column"] or xdata=[df_1["Column_i"], df_2["Column_j"],df_3["Column_k"], ...]. The latter combines the data from each df/column and plots the summed histogram.  This is especially important when you have multiple detectors (say gamma-ray detectors) each with their own filter condition and you want to view the full statitics.
+- bins: An integer value (e.g. bins=600)
+- range:  A list with the range of the histogram (e.g.. range=(-300,300))
 
+Optional Variables:
+- subplots: a list of the form where subplots=(plt.figure, plt.Axes) so you can put the histograms in a figure with many plots.  If no variable is supplied, the function will create its own figure
+- xlabel: The x-axis label.  Default is the column name from the xdata variable
+- ylabel: The y-axis label. Default is 'Counts'
+- label: A label to name the data if you have a legend
+- title: The title. Default is ''
+- color: The color of the line
+- linestyle: The default linestyle is 'solid'
+- linewidth: The default linewidth is 0.5
+- display_stats: Displays the integral, mean, and stdev give the range of the plot. Can be turned off using display_stats=False
+
+- subplots: Can 
 ### 2d-histograms
 tbd
 ## Key Features
