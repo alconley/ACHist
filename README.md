@@ -68,7 +68,7 @@ Creates a 2d histogram with the option of viewing X-projections, Y-projections, 
 
 - data: data must be formated as data=[ (df['XColumn'], df['YColumn']) ]. If you want to sum histograms, format the data as data==[ (df1['XColumn'], df1['YColumn']), (df2['XColumn'], df2['YColumn']), ...]
 - bins: list of bins in the form bins=(x_bins,y_bins)
-- range: range of the histogram in the form range=[ [x_initital,x_final], [y_initial,y_final ]
+- range: range of the histogram in the form range=[ [x_initital,x_final], [y_initial,y_final] ]
 
 #### Optional Variables
 
