@@ -1,7 +1,7 @@
 
 import polars as pl
 import matplotlib.pyplot as plt
-from matplotlib.widgets import PolygonSelector, LassoSelector
+from matplotlib.widgets import PolygonSelector
 import numpy as np
 import os
 from lmfit.models import GaussianModel, LinearModel
