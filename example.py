@@ -1,17 +1,16 @@
 import sys
-sys.path.append('../')
+sys.path.append('/')
 from histogrammer import Histogrammer
 import polars as pl
 import matplotlib.pyplot as plt 
 
 # read in the data
-df = pl.read_parquet("./run_83.parquet")
+df = pl.read_parquet("52Cr_July2023_REU_CeBrA/built/run_83.parquet")
 
-# print the availiable columns
-print(df.columns)
 
-# create an instance of the Histogrammer class
-h = Histogrammer()
+# print(df.columns) # print the availiable columns
+
+h = Histogrammer() # create an instance of the Histogrammer class
 
 # plot a subplot with the focal plane spectrum and the PID without a cut
 fig_NoCut, ax_NoCut = plt.subplots(2,1)
@@ -19,7 +18,7 @@ h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"]) ], bins=[512,512]
 h.histo1d(xdata=df["Xavg"], bins=600, range=(-300,300), subplots=(fig_NoCut, ax_NoCut[1])) # Spectrum without cut
 
 # filter the data frame with the proton cut created with the 2D histogram example
-PID_df = h.filter_df_with_cut(df=df, XColumn="ScintLeftEnergy", YColumn="AnodeBackEnergy", CutFile="example_cut.json")
+PID_df = h.filter_df_with_cut(df=df, XColumn="ScintLeftEnergy", YColumn="AnodeBackEnergy", CutFile="./histogrammer/example_cut.json")
 
 # plot a subplot with the focal plane spectrum and the PID with a cut
 fig_Cut, ax_Cut = plt.subplots(2,1)
