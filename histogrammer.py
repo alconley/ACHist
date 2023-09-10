@@ -14,7 +14,6 @@ from matplotlib.path import Path
 import matplotlib.colors as colors
 import json
 
-
 # tex_fonts = {
 #                 # Use LaTeX to write all text
 #                 "text.usetex": True,
@@ -30,7 +29,6 @@ import json
 #             }
 
 # plt.rcParams.update(tex_fonts)
-
 
 class Histogrammer:
 
@@ -49,7 +47,8 @@ class Histogrammer:
         self.figures = []
         self.cuts = []
         
-    """ CutHandler and Cut2D classes were create by Gordon McCain and modified for this histogrammer class
+    # CutHandler and Cut2D classes were create by Gordon McCain and modified for this histogrammer class
+    """ 
     Handler to recieve vertices from a matplotlib selector (i.e. PolygonSelector).
     Typically will be used interactively, most likely via cmd line interpreter. The onselect
     method should be passed to the selector object at construction. CutHandler can also be used in analysis
@@ -311,7 +310,6 @@ class Histogrammer:
 
                     pos = event.xdata           
                     background_line = ax.axvline(x=pos, color='green', linewidth=0.5)
-                    print(f"{Fore.GREEN}Background marker placed at {pos}{Style.RESET_ALL}")
                     background_line.set_antialiased(False)
                     background_markers.append(background_line)
                     fig.canvas.draw()
@@ -320,8 +318,6 @@ class Histogrammer:
 
                     pos = event.xdata
                     peak_line = ax.axvline(x=pos, color='purple', linewidth=0.5)
-                    print(f"{Fore.MAGENTA}Peak marker placed at {pos}{Style.RESET_ALL}")
-                    
                     peak_line.set_antialiased(False)
                     peak_markers.append(peak_line)
                     fig.canvas.draw()
@@ -334,56 +330,6 @@ class Histogrammer:
                     remove_lines(background_lines)
                     remove_lines(fit_lines)
                     temp_fits.clear()
-                    fig.canvas.draw()
-                
-                if event.key == '-': # remove the closest marker to cursor in axes
-                    
-                    remove_lines(background_lines)
-                    remove_lines(fit_lines)
-                    temp_fits.clear()
-
-                    x_cursor = event.xdata
-
-                    def line_distances(marker_array):
-                        if len(marker_array) > 0:
-                            distances = [x_cursor - line.get_xdata()[0] for line in marker_array]
-                            min_distance = np.min(np.abs(distances))
-                            min_distance_index = np.argmin(np.abs(distances))
-                            
-                            return [min_distance, min_distance_index]
-                        else:
-                            return None
-                    
-                    marker_distances = [line_distances(region_markers), line_distances(peak_markers), line_distances(background_markers)]
-
-                    # Filter out None values and find minimum distances
-                    valid_marker_distances = [min_distance for min_distance in marker_distances if min_distance is not None]
-
-                    # Check if there are valid distances
-                    if valid_marker_distances:
-                        # Find the minimum distance based on the first index
-                        min_distance = min(valid_marker_distances, key=lambda x: x[0])
-
-                        if min_distance == marker_distances[0]:
-                            for i, line in enumerate(region_markers):
-                                if i == min_distance[1]:
-                                    line.remove()
-                                    region_markers.pop(i)
-
-                        elif min_distance == marker_distances[1]:
-                            for i, line in enumerate(peak_markers):
-                                if i == min_distance[1]:
-                                    line.remove()
-                                    peak_markers.pop(i)
-
-                        elif min_distance == marker_distances[2]:
-                            for i, line in enumerate(background_markers):
-                                if i == min_distance[1]:
-                                    line.remove()
-                                    background_markers.pop(i)       
-                    else:
-                        print(f"{Fore.RED}{Style.BRIGHT}No valid distances found.{Style.RESET_ALL}")
-
                     fig.canvas.draw()
                        
                 if event.key == 'B':  # fit background
@@ -766,12 +712,8 @@ class Histogrammer:
         
         hist, x_edges, y_edges = np.histogram2d(x_data, y_data, bins=bins, range=range)
 
-        # draw a 2d histogram using matplotlib. If no ax is provided, make a new fig, ax using plt.subplots
-        if subplots is None:
-            fig, ax = plt.subplots()
-        else:
-            fig, ax = subplots 
-            
+        fig, ax = (plt.subplots() if subplots is None else subplots)
+                    
         handler = self.CutHandler()
         
         selector = PolygonSelector(ax, onselect=handler.onselect)
@@ -1004,8 +946,9 @@ class Histogrammer:
             return None
 
     def filter_df_with_cut(self, df:pl.DataFrame, XColumn:pl.Series, YColumn:pl.Series, CutFile: str):
-        
-        cut = self.load_cut_json(CutFile)
-        df = df.filter(pl.col(XColumn).arr.concat(YColumn).map(cut.is_cols_inside))
-        
-        return df
+        if os.path.exists(CutFile):
+            cut = self.load_cut_json(CutFile)
+            df = df.filter(pl.col(XColumn).arr.concat(YColumn).map(cut.is_cols_inside))
+            return df
+        else:
+            raise FileNotFoundError(f"The file '{CutFile}' does not exist.")
