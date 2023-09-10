@@ -1,6 +1,7 @@
 
 import polars as pl
 import matplotlib.pyplot as plt
+from matplotlib.widgets import PolygonSelector, LassoSelector
 import numpy as np
 import os
 from lmfit.models import GaussianModel, LinearModel
@@ -8,6 +9,11 @@ from lmfit.model import save_modelresult, load_modelresult, save_model, load_mod
 from scipy.signal import find_peaks
 import os
 from colorama import Fore, Style
+from tabulate import tabulate
+from matplotlib.path import Path
+import matplotlib.colors as colors
+import json
+
 
 # tex_fonts = {
 #                 # Use LaTeX to write all text
@@ -29,7 +35,7 @@ from colorama import Fore, Style
 class Histogrammer:
 
     def __init__(self):
-           
+        
         plt.rcParams['keymap.pan'].remove('p')
         plt.rcParams['keymap.home'].remove('r')
         plt.rcParams['keymap.fullscreen'].remove('f')
@@ -39,9 +45,51 @@ class Histogrammer:
         plt.rcParams['keymap.xscale'].remove('L')
         plt.rcParams['keymap.xscale'].remove('k')
         plt.rcParams['keymap.yscale'].remove('l')
-            
+                    
         self.figures = []
+        self.cuts = []
+        
+    """ CutHandler and Cut2D classes were create by Gordon McCain and modified for this histogrammer class
+    Handler to recieve vertices from a matplotlib selector (i.e. PolygonSelector).
+    Typically will be used interactively, most likely via cmd line interpreter. The onselect
+    method should be passed to the selector object at construction. CutHandler can also be used in analysis
+    applications to store cuts.
+    """
+    class CutHandler:
+        def __init__(self):
+            self.cuts: dict[str, Histogrammer.Cut2D] = {}
+
+        def onselect(self, vertices: list[tuple[float, float]]):
+            cut_default_name = f"cut_{len(self.cuts)}"
+            self.cuts[cut_default_name] = Histogrammer.Cut2D(cut_default_name, vertices)
+    
+    """
+    Implementation of 2D cuts as used in many types of graphical analyses with matplotlib
+    Path objects. Takes in a name (to identify the cut) and a list of points. The Path
+    takes the verticies, and can then be used to check if a point(s) is inside of the polygon using the 
+    is_*_inside functions. Can be serialized to json format. Can also retreive Nx2 ndarray of vertices
+    for plotting after the fact.
+    """
+    class Cut2D:
+        def __init__(self, name: str, vertices: list[tuple[float, float]]):
+            self.path: Path = Path(vertices, closed=True)
+            self.name = name
             
+        def is_point_inside(self, x: float, y: float) -> bool:
+            return self.path.contains_point((x,  y))
+
+        def is_arr_inside(self, points: list[tuple[float, float]]) -> list[bool]:
+            return self.path.contains_points(points)
+
+        def is_cols_inside(self, columns: pl.Series) -> pl.Series:
+            return pl.Series(values=self.path.contains_points(columns.to_list()))
+
+        def get_vertices(self) -> np.ndarray:
+            return self.path.vertices
+
+        def to_json_str(self) -> str:
+            return json.dumps(self, default=lambda obj: {"name": obj.name, "vertices": obj.path.vertices.tolist()} )
+                 
     def histo1d(
         self,
         xdata: list,
@@ -54,9 +102,9 @@ class Histogrammer:
         title: str = None,
         color: str = None,
         linestyle: str = None,
-        linewidth: int = None,
+        linewidth: float = None,
         display_stats:bool = True,
-    ):
+        ):
         
         if isinstance(xdata, np.ndarray): # handles the case for the x/y projections 
             data = xdata
@@ -227,6 +275,9 @@ class Histogrammer:
                     if len(region_markers) != 2:
                         print(f"{Fore.RED}{Style.BRIGHT}Must have two region markers!{Style.RESET_ALL}")
                     else:
+                        
+                        remove_lines(peak_markers)
+                        
                         region_markers_pos = [region_markers[0].get_xdata()[0], region_markers[1].get_xdata()[0]]
                         region_markers_pos.sort()
                         
@@ -252,6 +303,7 @@ class Histogrammer:
                             peak_line = ax.axvline(x=peak, color='purple', linewidth=0.5)
                             peak_line.set_antialiased(False)
                             peak_markers.append(peak_line)
+                            
                         
                         fig.canvas.draw()
                         
@@ -274,7 +326,7 @@ class Histogrammer:
                     peak_markers.append(peak_line)
                     fig.canvas.draw()
                         
-                if event.key == '-': # remove all markers and temp fits
+                if event.key == '_': # remove all markers and temp fits
 
                     remove_lines(region_markers)
                     remove_lines(peak_markers)
@@ -282,6 +334,56 @@ class Histogrammer:
                     remove_lines(background_lines)
                     remove_lines(fit_lines)
                     temp_fits.clear()
+                    fig.canvas.draw()
+                
+                if event.key == '-': # remove the closest marker to cursor in axes
+                    
+                    remove_lines(background_lines)
+                    remove_lines(fit_lines)
+                    temp_fits.clear()
+
+                    x_cursor = event.xdata
+
+                    def line_distances(marker_array):
+                        if len(marker_array) > 0:
+                            distances = [x_cursor - line.get_xdata()[0] for line in marker_array]
+                            min_distance = np.min(np.abs(distances))
+                            min_distance_index = np.argmin(np.abs(distances))
+                            
+                            return [min_distance, min_distance_index]
+                        else:
+                            return None
+                    
+                    marker_distances = [line_distances(region_markers), line_distances(peak_markers), line_distances(background_markers)]
+
+                    # Filter out None values and find minimum distances
+                    valid_marker_distances = [min_distance for min_distance in marker_distances if min_distance is not None]
+
+                    # Check if there are valid distances
+                    if valid_marker_distances:
+                        # Find the minimum distance based on the first index
+                        min_distance = min(valid_marker_distances, key=lambda x: x[0])
+
+                        if min_distance == marker_distances[0]:
+                            for i, line in enumerate(region_markers):
+                                if i == min_distance[1]:
+                                    line.remove()
+                                    region_markers.pop(i)
+
+                        elif min_distance == marker_distances[1]:
+                            for i, line in enumerate(peak_markers):
+                                if i == min_distance[1]:
+                                    line.remove()
+                                    peak_markers.pop(i)
+
+                        elif min_distance == marker_distances[2]:
+                            for i, line in enumerate(background_markers):
+                                if i == min_distance[1]:
+                                    line.remove()
+                                    background_markers.pop(i)       
+                    else:
+                        print(f"{Fore.RED}{Style.BRIGHT}No valid distances found.{Style.RESET_ALL}")
+
                     fig.canvas.draw()
                        
                 if event.key == 'B':  # fit background
@@ -295,6 +397,9 @@ class Histogrammer:
                 if event.key == 'f':  # Fit Gaussians to region
                     remove_lines(background_lines)
                     remove_lines(fit_lines)
+                    temp_fits.clear()
+                    
+                    print(temp_fits)
                     
                     if len(region_markers) != 2:
                         print(f"{Fore.RED}{Style.BRIGHT}Must have two region markers!{Style.RESET_ALL}")
@@ -333,10 +438,10 @@ class Histogrammer:
 
                             def initial_para(peak_position, peak_position_guess_uncertainty, amplitude_scale:float=None): # estimates the initital fit parameters
                                 
-                                avg_sigma = np.sum(hist_counts_subtracted[fit_range]) / np.std(hist_counts_subtracted[fit_range])
-
-                                sigma = dict(value=avg_sigma, min=0, max=avg_sigma * 4)
-
+                                # avg_sigma = np.sum(hist_counts_subtracted[fit_range]) / np.std(hist_counts_subtracted[fit_range])
+                                
+                                sigma = dict(value=hist_bin_width, min=0, max=hist_bin_width*4)
+                                
                                 center = dict(value=peak_position,
                                             min=peak_position - peak_position_guess_uncertainty,
                                             max=peak_position + peak_position_guess_uncertainty)
@@ -363,7 +468,7 @@ class Histogrammer:
                             total_peak_height = 0
                             for i, peak_position in enumerate(peak_positions):
                                 total_peak_height += hist_counts_subtracted_value(peak_position)
-                            
+
                             # Initialize the list of Gaussian models and their parameters
                             gaussian_models = []
                             
@@ -372,21 +477,19 @@ class Histogrammer:
                                 gauss = GaussianModel(prefix=f'g{i}_')
                                 
                                 amp_scale = hist_counts_subtracted_value(peak_position)/total_peak_height
-                                init_para = initial_para(peak_position,peak_position_guess_uncertainty=2*hist_bin_width, amplitude_scale=amp_scale)   
+                                init_para = initial_para(peak_position,peak_position_guess_uncertainty=3*hist_bin_width, amplitude_scale=amp_scale)   
                                     
                                 if i == 0:
                                     params = gauss.make_params(sigma=init_para[0],
                                                                 center=init_para[1],
                                                                 height=init_para[2],
-                                                                amplitude=init_para[3],
-                                                                area=4000)
+                                                                amplitude=init_para[3])
                                     
                                 else:
                                     params.update(gauss.make_params(sigma=init_para[0],
                                                                 center=init_para[1],
                                                                 height=init_para[2],
-                                                                amplitude=init_para[3],
-                                                                area=4000))
+                                                                amplitude=init_para[3]))
                                     
                                 gaussian_models.append(gauss)
                                 
@@ -404,17 +507,46 @@ class Histogrammer:
                             fit_lines.append(fit_p_background_line[0])
                             
                             print(f"{Fore.GREEN}{Style.BRIGHT}Fit Report{Style.RESET_ALL}")
-                            print(result.fit_report())
+                            # print(result.fit_report())
+                            
+                            fit_results = []
                             
                             # Decomposition of gaussians
                             for i, peak_position in enumerate(peak_positions):
                                 
                                 prefix = f'g{i}_'
-                                sigma_plot_width = 5
+                                sigma_plot_width = 4
                                 x_comp = np.linspace(result.params[f'{prefix}center'].value - sigma_plot_width * result.params[f'{prefix}sigma'].value,
                                     result.params[f'{prefix}center'].value + sigma_plot_width * result.params[f'{prefix}sigma'].value, 1000)
 
                                 components = result.eval_components(x=x_comp)
+                                
+                                # Get the center, amplitude, sigma, and FWHM for each Gaussian
+                                center_value = result.params[f'{prefix}center'].value
+                                center_uncertainty = result.params[f'{prefix}center'].stderr
+
+                                amplitude_value = result.params[f'{prefix}amplitude'].value
+                                amplitude_uncertainty = result.params[f'{prefix}amplitude'].stderr
+                                
+                                area_value = amplitude_value/hist_bin_width
+                                area_uncertainty = amplitude_uncertainty/hist_bin_width
+
+                                fwhm_value = result.params[f'{prefix}sigma'].value
+                                fwhm_uncertainty = result.params[f'{prefix}sigma'].stderr
+                                
+                                relative_width_value = fwhm_value/center_value *100
+                                relative_width_value_uncertainty = relative_width_value*np.sqrt( (fwhm_uncertainty/fwhm_value)**2 +  (center_uncertainty/center_value)**2 )
+                                
+
+                                # Format the values and their uncertainties
+                                center_formatted = f"{center_value:.4f} ± {center_uncertainty:.4f}"
+                                area_formatted = f"{area_value:.4f} ± {area_uncertainty:.4f}"
+                                
+                                fwhm_formatted = f"{fwhm_value:.4f} ± {fwhm_uncertainty:.4f}"
+                                relative_width_formatted = f"{relative_width_value:.4f} ± {relative_width_value_uncertainty:.4f}"
+
+                                # Append the formatted results to the list
+                                fit_results.append([f'{i}', center_formatted, area_formatted, fwhm_formatted, relative_width_formatted])
 
                                 # fit_line_comp = plt.plot(x_comp, components[prefix]+ background_result.eval(x=x_comp), color='purple', linewidth=0.5)  # Gaussian without background
                                 # fit_lines.append(fit_line_comp[0])
@@ -425,7 +557,13 @@ class Histogrammer:
                                 fit_peak_line = ax.axvline(x=result.params[f'{prefix}center'].value, color='purple', linewidth=0.5) # adjust the peak to be the center of the fit
                                 peak_markers.append(fit_peak_line)
                                 
-                                
+                                # Define column headers for the table
+                            headers = ["Gaussian", "Position", "Volume", "FWHM", "Relative Width [%]"]
+
+                            # Print the table
+                            table = tabulate(fit_results, headers, tablefmt="pretty")
+                            print(table)
+                                    
                             temp_fit_id = f"temp_fit_{len(temp_fits)}"
                             temp_fits[temp_fit_id] = {
                                 "region_markers": region_markers_pos,
@@ -576,7 +714,7 @@ class Histogrammer:
                                     
                                     prefix = f"{pre}_"
                                     
-                                    sigma_plot_width = 5
+                                    sigma_plot_width = 4
                                     loaded_x_comp = np.linspace(loaded_fit_result.params[f'{prefix}center'].value - sigma_plot_width * loaded_fit_result.params[f'{prefix}sigma'].value,
                                                                 loaded_fit_result.params[f'{prefix}center'].value + sigma_plot_width * loaded_fit_result.params[f'{prefix}sigma'].value, 1000)
                                                                 
@@ -600,7 +738,7 @@ class Histogrammer:
                                 fig.canvas.draw()
                             
                             print(f"{Fore.GREEN}{Style.BRIGHT}Loaded {len(loaded_fits)} fits from file: {filename}{Style.RESET_ALL}")
-        
+                                    
         ax.figure.canvas.mpl_connect('key_press_event', on_key)
             
         fig.tight_layout()
@@ -622,9 +760,7 @@ class Histogrammer:
         cmap: str = None,
         cbar: bool = True,
         ):
-
-        import matplotlib.colors as colors
-                
+ 
         # Concatenate the arrays horizontally to get the final result
         x_data = np.hstack([column[0] for column in data])
         y_data = np.hstack([column[1] for column in data])
@@ -637,16 +773,16 @@ class Histogrammer:
         else:
             fig, ax = subplots 
             
-            
+        handler = self.CutHandler()
+        
+        selector = PolygonSelector(ax, onselect=handler.onselect)
+        selector.set_active(False)
+        
         if cmap is None: "viridis"
-            
-            
-        # draw a 2d histogram and add a similar stat bar to the 2d histogram, just the intergral though
+        
         h = ax.hist2d(x_data, y_data, bins=bins, range=range, cmap=cmap, norm=colors.LogNorm())
         
-        if cbar:
-            fig.colorbar(h[3], ax=ax)
-            
+        if cbar: fig.colorbar(h[3], ax=ax)
             
         ax.set_xlim(range[0])
         ax.set_ylim(range[1])
@@ -693,93 +829,154 @@ class Histogrammer:
             ax.callbacks.connect('ylim_changed', on_lims_change)
             
         if save_histogram:
-            plt.savefig(f"{ylabel}_{xlabel}.png",format='png', dpi=900)
+            plt.savefig(f"{ylabel}_{xlabel}.png",format='png', dpi=1200)
             plt.savefig(f"{ylabel}_{xlabel}.pdf",format='pdf')
             
         # Keep track of the added lines for the x and y projections
         added_y_lines = []
         added_x_lines = []
         def on_press(event):  # Function to handle mouse click events like x/y projections
-            if event.inaxes is ax and event.key == 'y': # For drawing lines to do a y-projection
-                # Check if there are already two lines present
-                if len(added_y_lines) >= 2:
-                    # If two lines are present, remove them from the plot and the list
-                    for line in added_y_lines:
-                        line.remove()
-                    added_y_lines.clear()
+            
+            # Define a dictionary of keybindings, their descriptions, and notes
+            keybindings = {
                 
-                # Get the x-coordinate of the current view
-                x_coord = event.xdata
-                
-                # Add a vertical line to the 2D histogram plot
-                line = ax.axvline(x_coord, color='red')
-                
-                # Append the line to the list of added lines
-                added_y_lines.append(line)
+                'x': {
+                    'description': "Add a vertical line to view the X-projection",
+                    'note': "Must have two lines to view the X-projection",
+                },
+                'X': {
+                    'description': "Opens a 1D histogram of the X-projection between the two X-projection lines",
+                    'note': "",
+                },
+                'y': {
+                    'description': "Add a vertical line to view the Y-projection",
+                    'note': "Must have two lines to view the Y-projection",
+                },
+                'Y': {
+                    'description': "Opens a 1D histogram of the Y-projection between the two Y-projection lines",
+                    'note': "",
+                },
+                'c': {
+                    'description': "Enables Matplotlib's polygon selector tool",
+                    'note': "Left click to place vertices. Once the shape is completed, the vertices can be moved by dragging them.",
+                },
+                'C': {
+                    'description': "Saves the cut",
+                    'note': "User has to input the filename in the terminal (e.g. cut.json)",
+                },
 
-                # Show the figure with the updated plot
-                fig.canvas.draw()
+                'space-bar': {
+                    'description': "Show keybindings help",
+                    'note': "",
+                },
+            }
+
+            # Function to display the keybindings help
+            def show_keybindings_help():
+                print("\nKeybindings Help:")
+                for key, info in keybindings.items():
+                    description = info['description']
+                    note = info['note']
+                    print(f"  {Fore.YELLOW}{key}{Style.RESET_ALL}: {description}")
+                    if note:
+                        print(f"      Note: {note}")
+            
+            if event.inaxes is not None:
                 
-            if event.key == 'Y': # For showing the y-projection
-                
-                if len(added_y_lines) < 2: 
-                    print(f"{Fore.RED}{Style.BRIGHT}Must have two lines!{Style.RESET_ALL}")
+                if event.key == ' ': # display the help cheat sheet
+                    show_keybindings_help()
+            
+                if event.key == 'y': # For drawing lines to do a y-projection
+                    # Check if there are already two lines present
+                    if len(added_y_lines) >= 2:
+                        # If two lines are present, remove them from the plot and the list
+                        for line in added_y_lines:
+                            line.remove()
+                        added_y_lines.clear()
                     
-                else:
-                    x_coordinates = []
-                    for line in added_y_lines:
-                        x_coordinate = line.get_xdata()[0]  # Assuming the line is vertical and has only one x-coordinate
-                        x_coordinates.append(x_coordinate)
-                    x_coordinates.sort() 
+                    x_coord = event.xdata
+                    line = ax.axvline(x_coord, color='red')
+                    added_y_lines.append(line)
+
+                    fig.canvas.draw()
                     
-                    x_mask = (x_data >= x_coordinates[0]) & (x_data <= x_coordinates[1])
+                if event.key == 'Y': # For showing the y-projection
+                    
+                    if len(added_y_lines) < 2: 
+                        print(f"{Fore.RED}{Style.BRIGHT}Must have two lines!{Style.RESET_ALL}")
                         
-                    y_projection_data = y_data[x_mask]
+                    else:
+                        x_coordinates = []
+                        for line in added_y_lines:
+                            x_coordinate = line.get_xdata()[0]  # Assuming the line is vertical and has only one x-coordinate
+                            x_coordinates.append(x_coordinate)
+                        x_coordinates.sort() 
+                        
+                        x_mask = (x_data >= x_coordinates[0]) & (x_data <= x_coordinates[1])
+                            
+                        y_projection_data = y_data[x_mask]
+                        
+                        self.histo1d(xdata=y_projection_data, bins=bins[1], range=range[1], title=f"Y-Projection: {round(x_coordinates[0], 2)} to {round(x_coordinates[1], 2)}")
+                        
+                        plt.show()
+                        
+                if event.key == 'x': # For drawing lines to do a x-projection
+                    # Check if there are already two lines present
+                    if len(added_x_lines) >= 2:
+                        # If two lines are present, remove them from the plot and the list
+                        for line in added_x_lines:
+                            line.remove()
+                        added_x_lines.clear()
                     
-                    self.histo1d(xdata=y_projection_data, bins=bins[1], range=range[1], title=f"Y-Projection: {round(x_coordinates[0], 2)} to {round(x_coordinates[1], 2)}")
+                    y_coord = event.ydata
+                    line = ax.axhline(y_coord, color='green')
+                    added_x_lines.append(line)
+
+                    fig.canvas.draw()
                     
+                if event.key == 'X': # For showing the X-projection
+                    
+                    if len(added_x_lines) < 2: 
+                        print(f"{Fore.RED}{Style.BRIGHT}Must have two lines!{Style.RESET_ALL}")
+
+                    else:
+                        y_coordinates = []
+                        for line in added_x_lines:
+                            y_coordinate = line.get_ydata()[0] 
+                            y_coordinates.append(y_coordinate)
+                        y_coordinates.sort() 
+                        
+                        y_mask = (y_data >= y_coordinates[0]) & (y_data <= y_coordinates[1])
+                            
+                        x_projection_data = x_data[y_mask]
+                        
+                        self.histo1d(xdata=x_projection_data, bins=bins[1], range=range[1], title=f"X-Projection: {round(y_coordinates[0], 2)} to {round(y_coordinates[1], 2)}")
+                        
+                        plt.show()
+                        
+                if event.key == 'c': # create a cut
+
+                    print(f"{Fore.YELLOW}Activating the polygon selector tool:\n\tPress 'C' to save the cut (must enter cut name e.g. cut.json){Style.RESET_ALL}")
+                    
+                    selector.set_active(True)
                     plt.show()
                     
-            if event.inaxes is ax and event.key == 'x': # For drawing lines to do a x-projection
-                # Check if there are already two lines present
-                if len(added_x_lines) >= 2:
-                    # If two lines are present, remove them from the plot and the list
-                    for line in added_x_lines:
-                        line.remove()
-                    added_x_lines.clear()
-                
-                # Get the x-coordinate of the current view
-                y_coord = event.ydata
-                
-                # Add a vertical line to the 2D histogram plot
-                line = ax.axhline(y_coord, color='green')
-                
-                # Append the line to the list of added lines
-                added_x_lines.append(line)
-
-                # Show the figure with the updated plot
-                fig.canvas.draw()
-                
-            if event.key == 'X': # For showing the X-projection
-                
-                if len(added_x_lines) < 2: 
-                    print(f"{Fore.RED}{Style.BRIGHT}Must have two lines!{Style.RESET_ALL}")
-
-                else:
-                    y_coordinates = []
-                    for line in added_x_lines:
-                        y_coordinate = line.get_ydata()[0] 
-                        y_coordinates.append(y_coordinate)
-                    y_coordinates.sort() 
-                    
-                    y_mask = (y_data >= y_coordinates[0]) & (y_data <= y_coordinates[1])
-                        
-                    x_projection_data = x_data[y_mask]
-                    
-                    self.histo1d(xdata=x_projection_data, bins=bins[1], range=range[1], title=f"X-Projection: {round(y_coordinates[0], 2)} to {round(y_coordinates[1], 2)}")
-                    
+                if event.key == 'C': # save the cut to a file name that the user must enter
+                    selector.set_active(False)
                     plt.show()
                     
+                    handler.cuts["cut_0"].name = "cut"
+                    
+                    # Prompt the user for the output file name
+                    output_file = input(f"{Fore.YELLOW}Enter a name for the output file (e.g., cut.json): {Style.RESET_ALL}")
+
+                    # Write the cut to the specified output file
+                    try:
+                        self.write_cut_json(handler.cuts["cut_0"], output_file)
+                        print(f"{Fore.GREEN}Cut saved to '{output_file}' successfully.{Style.RESET_ALL}")
+                    except Exception as e:
+                        print(f"{Fore.RED}Error: {e}. Failed to save the cut to '{Style.RESET_ALL}'.")
+                        
         ax.figure.canvas.mpl_connect('key_press_event', on_press)
         
         fig.tight_layout()
@@ -787,4 +984,33 @@ class Histogrammer:
         self.figures.append(fig)
         
         return hist, x_edges, y_edges
- 
+
+    def write_cut_json(self, cut: Cut2D, filepath):
+        json_str = cut.to_json_str()
+        try:
+            with open(filepath, "w") as output:
+                output.write(json_str)
+                return True
+        except OSError as error:
+            print(f"An error occurred writing cut {cut.name} to file {filepath}: {error}")
+            return False
+
+    def load_cut_json(self, filepath: str):
+        try:
+            with open(filepath, "r") as input:
+                buffer = input.read()
+                cut_dict = json.loads(buffer)
+                if not "name" in cut_dict or not "vertices" in cut_dict:
+                    print(f"Data in file {filepath} is not the right format for Cut2D, could not load")
+                    return None
+                return self.Cut2D(cut_dict["name"], cut_dict["vertices"])
+        except OSError as error:
+            print(f"An error occurred reading trying to read a cut from file {filepath}: {error}")
+            return None
+
+    def filter_df_with_cut(self, df:pl.DataFrame, XColumn:pl.Series, YColumn:pl.Series, CutFile: str):
+        
+        cut = self.load_cut_json(CutFile)
+        df = df.filter(pl.col(XColumn).arr.concat(YColumn).map(cut.is_cols_inside))
+        
+        return df
