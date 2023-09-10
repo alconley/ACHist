@@ -46,7 +46,6 @@ for det in range(NumDetectors):
     pg_data.append( (det_df["XavgEnergyCalibrated"], det_df[f"Cebra{det}EnergyCalibrated"]) )
     tcut_xavg.append(det_df["XavgEnergyCalibrated"])
 
-h = Histogrammer()
 
 # timeToScintFig, timeToScintax = plt.subplots(2,3, figsize=(15,10))
 # timeToScintax = timeToScintax.flatten()
@@ -63,11 +62,17 @@ h = Histogrammer()
 
 
 
-h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
+# h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
 
-df = h.filter_df_with_cut(df=df, XColumn="ScintLeftEnergy", YColumn="AnodeBackEnergy", CutFile="test.json")
-h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
+# df = h.filter_df_with_cut(df=df, XColumn="ScintLeftEnergy", YColumn="AnodeBackEnergy", CutFile="test.json")
+# h.histo2d(data=[ (df["ScintLeftEnergy"],df["AnodeBackEnergy"])], bins=[512,512], range=[ [0,2048], [0,2048]])
 
+
+df = pl.read_parquet("./52Cr_July2023_REU_CeBrA/analysis/run_83_112_gainmatched.parquet")
+
+h = Histogrammer()
+
+h.histo1d(xdata=df["Xavg"], bins=600, range=(-300,300))
 
 
 

@@ -43,6 +43,26 @@ Optional Variables:
 - display_stats: Displays the integral, mean, and stdev give the range of the plot. Can be turned off using display_stats=False
 
 
+Fitting Gaussians:
+
+This class using lmfit to interactivly fit gaussians on 1D matplotlib histograms.  The goal for this was to be able to fit multiple gaussians on python easily while being able to save and load the fits for later use.
+
+- the keybinds can be viewed by hitting the space-bar 
+
+First the user must supply two region markers ('r').  The user then has a couple of options,
+- Put background markers ('b').  This will estimate the background with a linear line which can be visualized with 'B'.  If no background markers are supplied, the background will be estimated at the region markers.
+- Auto peak find between the region markers ('P'). This uses scipy-signal function "find_peaks".  The threshold is currently set to 5% of the max value in the region
+- Apply peak markers 'p'.  If no peak marker is supplied, the function will assume there is one gaussian with the center at mean of data between the region markers.
+
+The user then has to hit 'f' to preform the fit. 
+
+Additional binds:
+- '-' removes the nearest marker to the mouse position
+- '_' removes all the markers
+- 'F' Stores the fit
+- 'S' Saves the fit, the user must input the filename in the terminal
+- 'L' Loads a fit, the user must input the filename in the terminal
+
 ### 2d-histograms
 tbd
 ## Key Features
