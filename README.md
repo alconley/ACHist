@@ -43,7 +43,7 @@ Optional Variables:
 - display_stats: Displays the integral, mean, and stdev give the range of the plot. Can be turned off using display_stats=False
 
 
-Fitting Gaussians:
+#### Fitting Gaussians
 
 This class using lmfit to interactivly fit gaussians on 1D matplotlib histograms.  The goal for this was to be able to fit multiple gaussians on python easily while being able to save and load the fits for later use.
 
@@ -64,7 +64,9 @@ Additional binds:
 - 'L' Loads a fit, the user must input the filename in the terminal
 
 ### 2d-histograms
-tbd
+
+
+
 ## Key Features
 
 - Create 1D or 2D histograms from Polars Series or NumPy arrays.
