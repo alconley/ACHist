@@ -756,7 +756,6 @@ class Histogrammer:
         ylabel: str = None,
         subplots:(plt.figure,plt.Axes) = None,
         display_stats: bool = True,
-        save_histogram: bool = False,
         cmap: str = None,
         cbar: bool = True,
         ):
@@ -827,11 +826,7 @@ class Histogrammer:
             # Connect the on_lims_change function to the 'xlim_changed' event
             ax.callbacks.connect('xlim_changed', on_lims_change)
             ax.callbacks.connect('ylim_changed', on_lims_change)
-            
-        if save_histogram:
-            plt.savefig(f"{ylabel}_{xlabel}.png",format='png', dpi=1200)
-            plt.savefig(f"{ylabel}_{xlabel}.pdf",format='pdf')
-            
+              
         # Keep track of the added lines for the x and y projections
         added_y_lines = []
         added_x_lines = []
