@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 # read in the data
 df = pl.read_parquet("52Cr_July2023_REU_CeBrA/built/run_83.parquet")
 
-
 # print(df.columns) # print the availiable columns
 
 h = Histogrammer() # create an instance of the Histogrammer class
