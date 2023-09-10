@@ -42,7 +42,7 @@ Optional Variables:
 - linewidth: The default linewidth is 0.5
 - display_stats: Displays the integral, mean, and stdev give the range of the plot. Can be turned off using display_stats=False
 
-- subplots: Can 
+
 ### 2d-histograms
 tbd
 ## Key Features
