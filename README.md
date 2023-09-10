@@ -24,14 +24,12 @@ pip install polars matplotlib lmfit numpy colorama
 ## Usage
 ### 1d-histograms
 
-Function in histogram class to fit multiple gaussians together with the option of saving the fits which can be loaded into the histogram later.
-
-Variables: 
-- xdata: Can be formatted either as xdata=df["Column"] or xdata=[df_1["Column_i"], df_2["Column_j"],df_3["Column_k"], ...]. The latter combines the data from each df/column and plots the summed histogram.  This is especially important when you have multiple detectors (say gamma-ray detectors) each with their own filter condition and you want to view the full statitics.
+#### Variables
+- xdata: Can be formatted either as xdata=df["Column"] or xdata=[df_1["Column_i"], df_2["Column_j"],df_3["Column_k"], ...]. The latter combines the data from each df/column and plots the summed histogram.  This is especially important when you have multiple detectors (say gamma-ray detectors) each with their own filter condition and you want to view the full statitics. Data must be a Numpy column or a polars series.
 - bins: An integer value (e.g. bins=600)
 - range:  A list with the range of the histogram (e.g.. range=(-300,300))
 
-Optional Variables:
+#### Optional Variables
 - subplots: a list of the form where subplots=(plt.figure, plt.Axes) so you can put the histograms in a figure with many plots.  If no variable is supplied, the function will create its own figure
 - xlabel: The x-axis label.  Default is the column name from the xdata variable
 - ylabel: The y-axis label. Default is 'Counts'
@@ -41,7 +39,6 @@ Optional Variables:
 - linestyle: The default linestyle is 'solid'
 - linewidth: The default linewidth is 0.5
 - display_stats: Displays the integral, mean, and stdev give the range of the plot. Can be turned off using display_stats=False
-
 
 #### Fitting Gaussians
 
@@ -65,8 +62,34 @@ Additional binds:
 
 ### 2d-histograms
 
+Creates a 2d histogram with the option of viewing X-projections, Y-projections, and creating cuts using the polygon selector tool.
 
+#### Variables
 
+- data: data must be formated as data=[ (df['XColumn'], df['YColumn']) ]. If you want to sum histograms, format the data as data==[ (df1['XColumn'], df1['YColumn']), (df2['XColumn'], df2['YColumn']), ...]
+- bins: list of bins in the form bins=(x_bins,y_bins)
+- range: range of the histogram in the form range=[ [x_initital,x_final], [y_initial,y_final ]
+
+#### Optional Variables
+
+- xlabel: The x-axis label.  Default is ''
+- ylabel: The y-axis label. Default is ''
+- title: The title. Default is ''
+- display_stats: Displays the integral, mean, and stdev give the range of the plot. Can be turned off using display_stats=False
+- subplots: a list of the form where subplots=(plt.figure, plt.Axes) so you can put the histograms in a figure with many plots.  If no variable is supplied, the function will create its own figure
+- cmap: Colormap of the data. Default is 'viridis' with the a log norm
+- cbar: Displaying the color bar. Default is 'True'
+
+#### Keybinds
+
+- the keybinds can be viewed in the terminal by hitting the space-bar 
+- 'x': place a horizontal marker to view the X-projections
+- 'X': Creates a 1D X-projection histogram of the data between the horizontal markers
+- 'y': place a veritcal marker to view the Y-projections
+- 'Y': Creates a 1D Y-projection histogram of the data between the vertical markers
+- 'c': ativates the polygon select tool to create a cut
+- 'C': Saves the cut, user will be asked for a filename in the terminal
+  
 ## Key Features
 
 - Create 1D or 2D histograms from Polars Series or NumPy arrays.
@@ -74,6 +97,8 @@ Additional binds:
 - Gaussian peak fitting with the ability to add region, peak, and background markers.
 - Store and load fitted results for later analysis.
 - Extensive keybindings for user interaction.
+- Create a cut on a 2D histogram
+  
 
 ## Contributing
 
@@ -81,7 +106,7 @@ We welcome contributions to the Histogrammer project! Whether you want to report
 
 ### Reporting Issues
 
-If you encounter any issues, bugs, or unexpected behavior while using Histogrammer, please [open an issue](https://github.com/your-username/histogrammer/issues) on our GitHub repository. Be sure to include as much detail as possible, such as your environment, steps to reproduce the issue, and expected vs. actual outcomes.
+If you encounter any issues, bugs, or unexpected behavior while using Histogrammer, please [open an issue](https://github.com/alconley/histogrammer/issues) on our GitHub repository. Be sure to include as much detail as possible, such as your environment, steps to reproduce the issue, and expected vs. actual outcomes.
 
 ### Suggesting Enhancements
 
