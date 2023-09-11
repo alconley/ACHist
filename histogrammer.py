@@ -126,7 +126,7 @@ class Histogrammer:
 
         if linewidth is None: linewidth = 0.5
         
-        line, = ax.step(hist_bins[:-1], hist_counts, where='post', label=label, linewidth=linewidth, color=color, linestyle=linestyle,)
+        ax.step(hist_bins[:-1], hist_counts, where='post', label=label, linewidth=linewidth, color=color, linestyle=linestyle,)
         ax.set_xlim(range)
         ax.set_ylim(bottom=0)
         
@@ -694,7 +694,8 @@ class Histogrammer:
                 
     def histo2d(
         self,
-        data: list,
+        xdata: list,
+        ydata: list,
         bins: list,
         range: list,
         title: str = None,
@@ -707,8 +708,8 @@ class Histogrammer:
         ):
  
         # Concatenate the arrays horizontally to get the final result
-        x_data = np.hstack([column[0] for column in data])
-        y_data = np.hstack([column[1] for column in data])
+        x_data = np.hstack([column for column in xdata])
+        y_data = np.hstack([column for column in ydata])
         
         hist, x_edges, y_edges = np.histogram2d(x_data, y_data, bins=bins, range=range)
 
